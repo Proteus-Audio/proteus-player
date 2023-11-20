@@ -20,7 +20,7 @@ use file::*;
 
 fn main() {
     let app = tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![greet, play_pause, stop, get_duration, get_position, reset, get_state])
+        .invoke_handler(tauri::generate_handler![greet, play_pause, stop, get_duration, get_position, reset, get_state, seek, refresh_tracks])
         .manage(Mutex::new(state::Windows::new()))
         .menu(menu::make_menu("Proteus - Player"))
         .on_menu_event(|event| {

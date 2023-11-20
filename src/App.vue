@@ -2,7 +2,7 @@
   <div class="container">
     <div class="timeline">
       <div class="timestamp current-time">{{ formatTime(currentTime) }}</div>
-      <el-slider v-model="currentTimeAsPercent" :show-tooltip="false" size="small" disabled />
+      <el-slider v-model="currentTimeAsPercent" :show-tooltip="false" size="small" />
       <div class="timestamp total-time">{{ formatTime(duration) }}</div>
     </div>
 
@@ -14,7 +14,9 @@
         <IconPlay v-if="!playing" />
         <IconPause v-else />
       </el-icon>
-      <div></div>
+      <el-icon @click="shuffle" class="reset" :size="15" :color="'#9e9e9e'">
+        <IconShuffle />
+      </el-icon>
     </div>
 
     <div class="volume-control">
@@ -46,6 +48,7 @@ import IconVolume0 from './components/Icons/Volume0.vue'
 import IconVolume1 from './components/Icons/Volume1.vue'
 import IconVolume3 from './components/Icons/Volume3.vue'
 import IconReset from './components/Icons/Reset.vue'
+import IconShuffle from './components/Icons/Shuffle.vue'
 import { invoke } from '@tauri-apps/api'
 import { listen } from '@tauri-apps/api/event'
 // import { appWindow } from '@tauri-apps/api/window'
@@ -58,12 +61,18 @@ const duration = ref(null as number | null)
 const unlisten = ref(null as (() => void) | null)
 const endStatusLoop = ref(null as (() => void) | null)
 
-const currentTimeAsPercent = computed(() => {
+const currentTimeAsPercent = computed({get:() => {
   if (duration.value === null) return 0
   const percent = currentTime.value / duration.value
   if (percent > 1) return 100
   return percent * 100
-})
+}, set:(value: number) => {
+  const time = (duration.value || 0) * (value / 100)
+  invoke('seek', { position:time })
+  // if (duration.value === null) return
+  // const time = duration.value * (value / 100)
+  // currentTime.value = time
+}})
 
 const formatTime = (time: number | null) => {
   if (time === null) return '00:00'
@@ -71,7 +80,7 @@ const formatTime = (time: number | null) => {
   const minutes = Math.floor(time / 60)
     .toString()
     .padStart(2, '0')
-  const seconds = Math.floor(time % 60)
+  const seconds = Math.round(time % 60)
     .toString()
     .padStart(2, '0')
   return `${minutes}:${seconds}`
@@ -95,6 +104,10 @@ const reset = async () => {
   await invoke('stop');
 }
 
+const shuffle = async () => {
+  await invoke('refresh_tracks');
+}
+
 const statusLoop = () => {
   innerStatusLoop();
   let stop = false;
@@ -110,7 +123,7 @@ const statusLoop = () => {
     if (typeof track_duration === 'number') {
       duration.value = track_duration;
     } else if (typeof track_duration === 'string') {
-      duration.value = parseInt(track_duration);
+      duration.value = parseFloat(track_duration);
     }
 
     let track_time = await invoke('get_position');
@@ -118,9 +131,9 @@ const statusLoop = () => {
     // console.log(track_time);
 
     if (typeof track_time === 'number') {
-      currentTime.value = track_time / 100;
+      currentTime.value = track_time;
     } else if (typeof track_time === 'string') {
-      currentTime.value = parseInt(track_time) / 100;
+      currentTime.value = parseFloat(track_time);
     }
 
 
@@ -230,10 +243,10 @@ html {
 
           .el-slider__button-wrapper {
             opacity: 0;
-            cursor: default !important;
+            pointer-events: none !important;
             
             .el-slider__button {
-              cursor: default !important;
+            pointer-events: none !important;
             }
           }
         }

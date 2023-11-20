@@ -50,7 +50,7 @@ pub fn load_in_window(handle: &AppHandle, window_label: &str) {
         let duration = player.get_duration();
         let title = path.file_name().unwrap().to_str().unwrap();
 
-        window.set_title(title);
+        window.set_title(title).unwrap();
 
         let payload = LoadPayload {
             path: path.to_str().unwrap().to_string(),
@@ -90,23 +90,24 @@ pub fn play_pause(state: State<Mutex<Windows>>, window: Window) -> String {
 # [tauri::command]
 pub fn stop(state: State<Mutex<Windows>>, window: Window) {
     let players = state.lock().unwrap();
-    let player = players.get(&window.label()).unwrap().lock().unwrap();
+    let mut player = players.get(&window.label()).unwrap().lock().unwrap();
     player.stop();
+    player.refresh_tracks();
 }
 
-// # [tauri::command]
-// pub fn seek(state: State<Mutex<Windows>>, window: Window, position: f64) -> String {
-//     println!("Seek {:?}", window);
-//     let mut response = String::from("Stopped");
-//     let players = state.lock().unwrap();
-//     let player = players.get(&window.label()).unwrap();
-//     if player.is_playing() {
-//         player.seek(position);
-//         response = String::from("Seeking");
-//     }
-//     drop(players);
-//     response
-// }
+# [tauri::command]
+pub fn seek(state: State<Mutex<Windows>>, window: Window, position: f64) {
+    let players = state.lock().unwrap();
+    let mut player = players.get(&window.label()).unwrap().lock().unwrap();
+    player.seek(position);
+}
+
+# [tauri::command]
+pub fn refresh_tracks(state: State<Mutex<Windows>>, window: Window) {
+    let players = state.lock().unwrap();
+    let mut player = players.get(&window.label()).unwrap().lock().unwrap();
+    player.refresh_tracks();
+}
 
 // # [tauri::command]
 // pub fn set_volume(state: State<Mutex<Windows>>, window: Window, volume: f64) -> String {
@@ -166,8 +167,9 @@ pub fn get_position(state: State<Mutex<Windows>>, window: Window) -> u32 {
 # [tauri::command]
 pub fn reset(state: State<Mutex<Windows>>, window: Window) {
     let players = state.lock().unwrap();
-    let player = players.get(&window.label()).unwrap().lock().unwrap();
+    let mut player = players.get(&window.label()).unwrap().lock().unwrap();
     player.stop();
+    player.refresh_tracks();
 }
 
 # [tauri::command]
