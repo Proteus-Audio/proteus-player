@@ -5,3 +5,9 @@ export interface Track {
   albumImageUrl?: string
   duration: number
 }
+
+export interface LoadPayload {
+  path: string
+  duration: number
+  window_label: string
+}

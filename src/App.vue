@@ -21,11 +21,14 @@
 
     <div class="volume-control">
       <div class="volume-status">
-        <el-icon v-if="volume === 0" :size="12" :color="'#9e9e9e'">
+        <el-icon v-if="volumeAsPercent === 0" :size="16" :color="'#9e9e9e'">
           <IconVolume0 />
         </el-icon>
-        <el-icon v-else-if="volume < 30" :size="12" :color="'#9e9e9e'">
+        <el-icon v-else-if="volumeAsPercent < 30" :size="16" :color="'#9e9e9e'">
           <IconVolume1 />
+        </el-icon>
+        <el-icon v-else-if="volumeAsPercent < 80" :size="16" :color="'#9e9e9e'">
+          <IconVolume2 />
         </el-icon>
         <el-icon v-else :size="16" :color="'#9e9e9e'">
           <IconVolume3 />
@@ -42,18 +45,20 @@
 // Check out https://vuejs.org/api/sfc-script-setup.html#script-setup
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 // import { VideoPause, VideoPlay } from "@element-plus/icons-vue"
-import IconPlay from './components/Icons/Play.vue'
-import IconPause from './components/Icons/Pause.vue'
-import IconVolume0 from './components/Icons/Volume0.vue'
-import IconVolume1 from './components/Icons/Volume1.vue'
-import IconVolume3 from './components/Icons/Volume3.vue'
-import IconReset from './components/Icons/Reset.vue'
-import IconShuffle from './components/Icons/Shuffle.vue'
+import IconPlay from './components/Icons/IconPlay.vue'
+import IconPause from './components/Icons/IconPause.vue'
+import IconVolume0 from './components/Icons/IconVolume0.vue'
+import IconVolume1 from './components/Icons/IconVolume1.vue'
+import IconVolume2 from './components/Icons/IconVolume2.vue'
+import IconVolume3 from './components/Icons/IconVolume3.vue'
+import IconReset from './components/Icons/IconReset.vue'
+import IconShuffle from './components/Icons/IconShuffle.vue'
 import { invoke } from '@tauri-apps/api/core'
 import { Options, listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { defaultMenu } from './utils/menu'
 import { Menu } from '@tauri-apps/api/menu'
+import { LoadPayload } from './types/track'
 // import { appWindow } from '@tauri-apps/api/window'
 // import Slider from "element-plus";
 
@@ -81,7 +86,7 @@ const currentTimeAsPercent = computed({
   },
   set: (value: number) => {
     const time = (duration.value || 0) * (value / 100)
-    invoke('seek', { position: time })
+    void invoke('seek', { position: time })
     // if (duration.value === null) return
     // const time = duration.value * (value / 100)
     // currentTime.value = time
@@ -94,7 +99,7 @@ const volumeAsPercent = computed({
   },
   set: (value: number) => {
     const volume = value / 100
-    invoke('set_volume', { volume })
+    void invoke('set_volume', { volume })
   },
 })
 
@@ -162,7 +167,7 @@ onMounted(async () => {
     'LOAD_FILE',
     (event) => {
       console.log(event)
-      duration.value = (event.payload as any).duration
+      duration.value = (event.payload as LoadPayload).duration
       // console.log(event.payload);
       // duration.value = event.payload.duration;
     },
