@@ -32,7 +32,7 @@
         </el-icon>
       </div>
 
-      <el-slider v-model="volume" :show-tooltip="false" size="small" />
+      <el-slider v-model="volumeAsPercent" :show-tooltip="false" size="small" />
     </div>
   </div>
 </template>
@@ -49,30 +49,54 @@ import IconVolume1 from './components/Icons/Volume1.vue'
 import IconVolume3 from './components/Icons/Volume3.vue'
 import IconReset from './components/Icons/Reset.vue'
 import IconShuffle from './components/Icons/Shuffle.vue'
-import { invoke } from '@tauri-apps/api'
-import { listen } from '@tauri-apps/api/event'
+import { invoke } from '@tauri-apps/api/core'
+import { Options, listen } from '@tauri-apps/api/event'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+import { defaultMenu } from './utils/menu'
+import { Menu } from '@tauri-apps/api/menu'
 // import { appWindow } from '@tauri-apps/api/window'
 // import Slider from "element-plus";
 
-const volume = ref(50)
+const volume = ref(1.0)
 const playing = ref(false)
 const currentTime = ref(0)
 const duration = ref(null as number | null)
 const unlisten = ref(null as (() => void) | null)
 const endStatusLoop = ref(null as (() => void) | null)
+const menu = ref<Menu | null>(null)
 
-const currentTimeAsPercent = computed({get:() => {
-  if (duration.value === null) return 0
-  const percent = currentTime.value / duration.value
-  if (percent > 1) return 100
-  return percent * 100
-}, set:(value: number) => {
-  const time = (duration.value || 0) * (value / 100)
-  invoke('seek', { position:time })
-  // if (duration.value === null) return
-  // const time = duration.value * (value / 100)
-  // currentTime.value = time
-}})
+interface Status {
+  duration: number | null
+  playing: boolean
+  time: number
+  volume: number
+}
+
+const currentTimeAsPercent = computed({
+  get: () => {
+    if (duration.value === null) return 0
+    const percent = currentTime.value / duration.value
+    if (percent > 1) return 100
+    return percent * 100
+  },
+  set: (value: number) => {
+    const time = (duration.value || 0) * (value / 100)
+    invoke('seek', { position: time })
+    // if (duration.value === null) return
+    // const time = duration.value * (value / 100)
+    // currentTime.value = time
+  },
+})
+
+const volumeAsPercent = computed({
+  get: () => {
+    return volume.value * 100
+  },
+  set: (value: number) => {
+    const volume = value / 100
+    invoke('set_volume', { volume })
+  },
+})
 
 const formatTime = (time: number | null) => {
   if (time === null) return '00:00'
@@ -87,88 +111,64 @@ const formatTime = (time: number | null) => {
 }
 
 const playPause = async () => {
-  const status = await invoke('play_pause');
+  const status = await invoke('play_pause')
   switch (status) {
     case 'Playing':
-      playing.value = true;
-      break;
+      playing.value = true
+      break
     case 'Paused':
-      playing.value = false;
-      break;
+      playing.value = false
+      break
     default:
-      break;
+      break
   }
 }
 
 const reset = async () => {
-  await invoke('stop');
+  await invoke('stop')
 }
 
 const shuffle = async () => {
-  await invoke('refresh_tracks');
+  await invoke('refresh_tracks')
 }
 
-const statusLoop = () => {
-  innerStatusLoop();
-  let stop = false;
-  // Return custom unlisten function
-  return function unlisten() {
-    stop = true;
-  }
-
-  async function innerStatusLoop() {
-
-    let track_duration = await invoke('get_duration');
-
-    if (typeof track_duration === 'number') {
-      duration.value = track_duration;
-    } else if (typeof track_duration === 'string') {
-      duration.value = parseFloat(track_duration);
-    }
-
-    let track_time = await invoke('get_position');
-
-    // console.log(track_time);
-
-    if (typeof track_time === 'number') {
-      currentTime.value = track_time;
-    } else if (typeof track_time === 'string') {
-      currentTime.value = parseFloat(track_time);
-    }
-
-
-    let track_state = (await invoke('get_state')) as "Playing" | "Paused" | "Stopped";
-
-    switch (track_state) {
-      case 'Playing':
-        playing.value = true;
-        break;
-      case 'Paused':
-        playing.value = false;
-        break;
-      case 'Stopped':
-        playing.value = false;
-        break;
-      default:
-        break;
-    }
-
-    setTimeout(() => {
-      if (stop) return;
-      innerStatusLoop();
-    }, 100);
-  }
+const setStatus = (status: Status) => {
+  duration.value = status.duration
+  playing.value = status.playing
+  currentTime.value = status.time
+  volume.value = status.volume
 }
+
+const unlisteners = ref<(() => void)[]>([])
+
+// onBeforeMount(async () => {
+// })
 
 onMounted(async () => {
-  unlisten.value = await listen('LOAD_FILE', (event) => {
-    console.log(event);
-    duration.value = (event.payload as any).duration
-    // console.log(event.payload);
-    // duration.value = event.payload.duration;
-  });
+  const currentWindow = getCurrentWindow()
+  const newMenu = await defaultMenu()
+  await newMenu.setAsAppMenu()
+  menu.value = newMenu
+  const emitTarget = {
+    target: {
+      kind: 'WebviewWindow',
+      label: currentWindow.label,
+    },
+  } as Options
 
-  endStatusLoop.value = statusLoop();
+  console.log('set as app menu')
+
+  unlisten.value = await listen(
+    'LOAD_FILE',
+    (event) => {
+      console.log(event)
+      duration.value = (event.payload as any).duration
+      // console.log(event.payload);
+      // duration.value = event.payload.duration;
+    },
+    emitTarget,
+  )
+
   // const status = await invoke('get_status');
   // switch (status) {
   //   case 'Playing':
@@ -182,18 +182,40 @@ onMounted(async () => {
   // }
   // const time = await invoke('get_time');
   // currentTime.value = time;
-});
+
+  const updateStatus = await listen(
+    'UPDATE_STATUS',
+    (event) => {
+      const payload = event.payload as Status
+      console.log(payload)
+      setStatus(payload)
+    },
+    emitTarget,
+  )
+  unlisteners.value.push(updateStatus)
+
+  const helloMessage = await listen(
+    'HELLO',
+    (event) => {
+      const payload = event.payload as string
+      console.log(payload)
+    },
+    emitTarget,
+  )
+  unlisteners.value.push(helloMessage)
+})
 
 onUnmounted(() => {
   if (unlisten.value) {
-    unlisten.value();
+    unlisten.value()
   }
 
   if (endStatusLoop.value) {
-    endStatusLoop.value();
+    endStatusLoop.value()
   }
-});
 
+  unlisteners.value.forEach((unlistener) => unlistener())
+})
 </script>
 
 <style lang="scss" scoped>
@@ -205,14 +227,29 @@ html {
     overflow: hidden;
     height: 100vh;
     .container {
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-        Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji',
-        'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+      font-family:
+        Inter,
+        ui-sans-serif,
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        'Segoe UI',
+        Roboto,
+        'Helvetica Neue',
+        Arial,
+        'Noto Sans',
+        sans-serif,
+        'Apple Color Emoji',
+        'Segoe UI Emoji',
+        'Segoe UI Symbol',
+        'Noto Color Emoji';
       font-size: 1rem;
       font-weight: normal;
       color: #9e9e9e;
       max-height: 100px;
+      height: 100px;
       overflow: hidden;
+      position: relative;
 
       :deep(.el-slider) {
         .el-slider__runway {
@@ -229,8 +266,13 @@ html {
         grid-template-columns: 30px 1fr 30px;
         align-items: center;
         justify-items: center;
-        padding: 0 1em 0.2em;
+        padding: 0 1em;
         gap: 1em;
+        height: 40px;
+        position: absolute;
+        top: -0.2em;
+        left: 0;
+        width: calc(100% - 2em);
         // margin-top: -1em;
 
         :deep(.el-slider) {
@@ -244,9 +286,9 @@ html {
           .el-slider__button-wrapper {
             opacity: 0;
             pointer-events: none !important;
-            
+
             .el-slider__button {
-            pointer-events: none !important;
+              pointer-events: none !important;
             }
           }
         }
@@ -283,11 +325,18 @@ html {
         align-items: center;
         justify-items: left;
         padding: 0.2em 1em 0;
+        height: 50px;
+        position: absolute;
+        bottom: -0.4em;
+        left: 0;
+        width: calc(100% - 2em);
+        pointer-events: none;
 
         :deep(.el-slider) {
+          pointer-events: auto;
           .el-slider__button {
-            height: 12px;
-            width: 12px;
+            height: 10px;
+            width: 10px;
             background-color: #c4c4c4;
             border-width: 0;
           }
