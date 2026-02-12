@@ -56,8 +56,6 @@ import IconShuffle from './components/Icons/IconShuffle.vue'
 import { invoke } from '@tauri-apps/api/core'
 import { Options, listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { defaultMenu } from './utils/menu'
-import { Menu } from '@tauri-apps/api/menu'
 import { LoadPayload } from './types/track'
 // import { appWindow } from '@tauri-apps/api/window'
 // import Slider from "element-plus";
@@ -68,7 +66,6 @@ const currentTime = ref(0)
 const duration = ref(null as number | null)
 const unlisten = ref(null as (() => void) | null)
 const endStatusLoop = ref(null as (() => void) | null)
-const menu = ref<Menu | null>(null)
 
 interface Status {
   duration: number | null
@@ -151,17 +148,12 @@ const unlisteners = ref<(() => void)[]>([])
 
 onMounted(async () => {
   const currentWindow = getCurrentWindow()
-  const newMenu = await defaultMenu()
-  await newMenu.setAsAppMenu()
-  menu.value = newMenu
   const emitTarget = {
     target: {
       kind: 'WebviewWindow',
       label: currentWindow.label,
     },
   } as Options
-
-  console.log('set as app menu')
 
   unlisten.value = await listen(
     'LOAD_FILE',

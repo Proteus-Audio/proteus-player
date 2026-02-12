@@ -10,6 +10,7 @@ fn greet(name: &str) -> String {
 }
 
 mod file;
+mod menu;
 mod state;
 mod window;
 
@@ -22,6 +23,8 @@ fn main() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .menu(menu::build_menu)
+        .on_menu_event(menu::handle_menu_event)
         // .plugin(tauri_plugin_notification::init())
         // .plugin(tauri_plugin_http::init())
         // .plugin(tauri_plugin_fs::init())
@@ -52,7 +55,10 @@ fn main() {
         tauri::RunEvent::ExitRequested { api, .. } => {
             api.prevent_exit();
         }
-        tauri::RunEvent::Reopen { has_visible_windows, .. } => {
+        tauri::RunEvent::Reopen {
+            has_visible_windows,
+            ..
+        } => {
             if !has_visible_windows {
                 let window = window::create_window(_app_handle);
 
