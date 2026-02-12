@@ -126,11 +126,35 @@ const playPause = async () => {
   }
 }
 
-const handleKeyDown = (event: KeyboardEvent) => {
-  if (event.code !== 'Space' || event.repeat) return
+const seekBySeconds = async (offset: number) => {
+  const maxTime = duration.value ?? Number.POSITIVE_INFINITY
+  const nextTime = Math.max(0, Math.min(maxTime, currentTime.value + offset))
+  await invoke('seek', { position: nextTime })
+}
 
-  event.preventDefault()
-  void playPause()
+const handleKeyDown = (event: KeyboardEvent) => {
+  if (event.repeat) return
+
+  switch (event.code) {
+    case 'Space':
+      event.preventDefault()
+      void playPause()
+      break
+    case 'ArrowRight':
+      event.preventDefault()
+      void seekBySeconds(5)
+      break
+    case 'ArrowLeft':
+      event.preventDefault()
+      void seekBySeconds(-5)
+      break
+    // case 's':
+    //   event.preventDefault()
+    //   void shuffle()
+    //   break
+    default:
+      break
+  }
 }
 
 const reset = async () => {
