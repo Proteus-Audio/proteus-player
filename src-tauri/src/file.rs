@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -41,7 +42,6 @@ pub fn load_in_window(handle: &AppHandle, window_label: &str) {
             return;
         }
 
-        let state: State<Mutex<Windows>> = window.state();
         let path_option = match file_path {
             Some(path) => path,
             None => {
@@ -58,55 +58,63 @@ pub fn load_in_window(handle: &AppHandle, window_label: &str) {
             }
         };
 
-        let mut players = state.lock().unwrap();
-
-        players.add(
-            window_label.to_string(),
-            &path.to_str().unwrap().to_string(),
-        );
-
-        let mut player = players.get(&window_label).unwrap().lock().unwrap();
-
-        let window_label_clone = window_label.clone();
-        let reporter = move |Report {
-                                 time,
-                                 volume,
-                                 duration,
-                                 playing,
-                             }| {
-            let report = serde_json::json!({
-                "time": time,
-                "volume": volume,
-                "duration": duration,
-                "playing": playing
-            });
-
-            handle_clone
-                .emit_to(
-                    EventTarget::webview_window(&window_label_clone),
-                    "UPDATE_STATUS",
-                    report,
-                )
-                .expect("failed to emit event");
-        };
-
-        player.set_reporting(Arc::new(Mutex::new(reporter)), Duration::from_millis(100));
-
-        let duration = player.get_duration();
-        let title = path.file_name().unwrap().to_str().unwrap();
-
-        window.set_title(title).unwrap();
-
-        let payload = LoadPayload {
-            path: path.to_str().unwrap().to_string(),
-            duration: duration as u32,
-            window_label: window_label.to_string(),
-        };
-
-        window
-            .emit_to(&window_label, "LOAD_FILE", payload)
-            .expect("failed to emit event");
+        load_path_in_window(&handle_clone, &window_label, path);
     });
+}
+
+pub fn load_path_in_window(handle: &AppHandle, window_label: &str, path: &Path) {
+    let window = handle.get_webview_window(window_label).unwrap();
+    let state: State<Mutex<Windows>> = window.state();
+
+    let mut players = state.lock().unwrap();
+
+    players.add(
+        window_label.to_string(),
+        &path.to_str().unwrap().to_string(),
+    );
+
+    let mut player = players.get(window_label).unwrap().lock().unwrap();
+
+    let window_label_clone = window_label.to_string();
+    let handle_clone = handle.clone();
+    let reporter = move |Report {
+                             time,
+                             volume,
+                             duration,
+                             playing,
+                         }| {
+        let report = serde_json::json!({
+            "time": time,
+            "volume": volume,
+            "duration": duration,
+            "playing": playing
+        });
+
+        handle_clone
+            .emit_to(
+                EventTarget::webview_window(&window_label_clone),
+                "UPDATE_STATUS",
+                report,
+            )
+            .expect("failed to emit event");
+    };
+
+    player.set_reporting(Arc::new(Mutex::new(reporter)), Duration::from_millis(100));
+
+    let duration = player.get_duration();
+    let title = path.file_name().unwrap().to_str().unwrap();
+
+    window.set_title(title).unwrap();
+
+    let payload = LoadPayload {
+        path: path.to_str().unwrap().to_string(),
+        duration: duration as u32,
+        window_label: window_label.to_string(),
+    };
+
+    window
+        .emit_to(window_label, "LOAD_FILE", payload)
+        .expect("failed to emit event");
 }
 
 #[tauri::command]

@@ -2,7 +2,7 @@ use tauri::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Wry};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
-use crate::file;
+use crate::{file, window};
 
 pub fn build_menu(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
     let about = MenuItem::with_id(app, "about", "About Proteus Player", true, None::<&str>)?;
@@ -104,6 +104,13 @@ pub fn build_menu(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
     )
 }
 
+pub fn build_tray_menu(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
+    let open = MenuItem::with_id(app, "tray_open", "Open...", true, None::<&str>)?;
+    let quit = PredefinedMenuItem::quit(app, None)?;
+
+    Menu::with_items(app, &[&open, &quit])
+}
+
 pub fn handle_menu_event(app: &AppHandle<Wry>, event: MenuEvent) {
     match event.id().as_ref() {
         "about" => {
@@ -119,6 +126,26 @@ pub fn handle_menu_event(app: &AppHandle<Wry>, event: MenuEvent) {
         }
         "open" => {
             file::load(app.clone());
+        }
+        "tray_open" => {
+            let app = app.clone();
+            app.dialog()
+                .file()
+                .add_filter("Audio/Prot Files", &["mka", "prot"])
+                .pick_file(move |file_path| {
+                    let path_option = match file_path {
+                        Some(path) => path,
+                        None => return,
+                    };
+
+                    let path = match path_option.as_path() {
+                        Some(path) => path.to_path_buf(),
+                        None => return,
+                    };
+
+                    let new_window = window::create_window(&app);
+                    file::load_path_in_window(&app, new_window.label(), &path);
+                });
         }
         "save" => {
             app.dialog()

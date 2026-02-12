@@ -23,6 +23,20 @@ fn main() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            let handle = app.handle();
+            let tray_menu = menu::build_tray_menu(&handle)?;
+            let mut tray_builder = tauri::tray::TrayIconBuilder::with_id("tray")
+                .menu(&tray_menu)
+                .tooltip("Proteus Player");
+
+            if let Some(icon) = handle.default_window_icon().cloned() {
+                tray_builder = tray_builder.icon(icon);
+            }
+
+            tray_builder.build(app)?;
+            Ok(())
+        })
         .menu(menu::build_menu)
         .on_menu_event(menu::handle_menu_event)
         // .plugin(tauri_plugin_notification::init())
