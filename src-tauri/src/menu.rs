@@ -1,106 +1,146 @@
-use tauri::{CustomMenuItem, Menu, MenuItem, Submenu, AboutMetadata};
+use tauri::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
+use tauri::{AppHandle, Wry};
+use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
-pub fn make_menu(#[allow(unused)] app_name: &str) -> Menu {
-    let mut menu = Menu::new();
-    #[cfg(target_os = "macos")]
-    {
-      menu = menu.add_submenu(Submenu::new(
-        app_name,
-        Menu::new()
-          .add_native_item(MenuItem::About(
-            app_name.to_string(),
-            AboutMetadata::default(),
-          ))
-          .add_native_item(MenuItem::Separator)
-          .add_native_item(MenuItem::Services)
-          .add_native_item(MenuItem::Separator)
-          .add_native_item(MenuItem::Hide)
-          .add_native_item(MenuItem::HideOthers)
-          .add_native_item(MenuItem::ShowAll)
-          .add_native_item(MenuItem::Separator)
-          .add_native_item(MenuItem::Quit),
-      ));
+use crate::file;
+
+pub fn build_menu(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
+    let about = MenuItem::with_id(app, "about", "About Proteus Player", true, None::<&str>)?;
+
+    let prot_sep1 = PredefinedMenuItem::separator(app)?;
+    let prot_sep2 = PredefinedMenuItem::separator(app)?;
+    let prot_sep3 = PredefinedMenuItem::separator(app)?;
+    let services = PredefinedMenuItem::services(app, None)?;
+    let hide = PredefinedMenuItem::hide(app, None)?;
+    let hide_others = PredefinedMenuItem::hide_others(app, None)?;
+    let show_all = PredefinedMenuItem::show_all(app, None)?;
+    let quit = PredefinedMenuItem::quit(app, None)?;
+
+    let prot_menu = Submenu::with_id_and_items(
+        app,
+        "prot",
+        "Proteus Author",
+        true,
+        &[
+            &about,
+            &prot_sep1,
+            &services,
+            &prot_sep2,
+            &hide,
+            &hide_others,
+            &show_all,
+            &prot_sep3,
+            &quit,
+        ],
+    )?;
+
+    let new_window = MenuItem::with_id(app, "new_window", "New Window", true, Some("CmdOrCtrl+N"))?;
+    // let save = MenuItem::with_id(app, "save", "Save", true, Some("CmdOrCtrl+S"))?;
+    // let save_as = MenuItem::with_id(app, "save_as", "Save As", true, Some("CmdOrCtrl+Shift+S"))?;
+    let open = MenuItem::with_id(app, "open", "Open", true, Some("CmdOrCtrl+O"))?;
+    // let export_prot = MenuItem::with_id(
+    //     app,
+    //     "export_prot",
+    //     "Export Prot File",
+    //     true,
+    //     Some("CmdOrCtrl+Shift+E"),
+    // )?;
+
+    let file_sep1 = PredefinedMenuItem::separator(app)?;
+    let file_sep2 = PredefinedMenuItem::separator(app)?;
+
+    let file_menu = Submenu::with_id_and_items(
+        app,
+        "file",
+        "File",
+        true,
+        &[
+            &new_window,
+            &file_sep1,
+            // &save,
+            // &save_as,
+            &open,
+            &file_sep2,
+            // &export_prot,
+        ],
+    )?;
+
+    let undo = PredefinedMenuItem::undo(app, None)?;
+    let redo = PredefinedMenuItem::redo(app, None)?;
+    let cut = PredefinedMenuItem::cut(app, None)?;
+    let copy = PredefinedMenuItem::copy(app, None)?;
+    let paste = PredefinedMenuItem::paste(app, None)?;
+    let edit_sep = PredefinedMenuItem::separator(app)?;
+
+    let edit_menu = Submenu::with_id_and_items(
+        app,
+        "edit",
+        "Edit",
+        true,
+        &[&undo, &redo, &edit_sep, &cut, &copy, &paste],
+    )?;
+
+    let zoom_in = MenuItem::with_id(app, "zoom", "Zoom In", true, Some("CmdOrCtrl+="))?;
+    let zoom_out = MenuItem::with_id(app, "zoom_out", "Zoom Out", true, Some("CmdOrCtrl+-"))?;
+
+    let view_menu = Submenu::with_id_and_items(app, "view", "View", true, &[&zoom_in, &zoom_out])?;
+
+    let minimize = PredefinedMenuItem::minimize(app, None)?;
+    let close_window = PredefinedMenuItem::close_window(app, None)?;
+    let window_sep = PredefinedMenuItem::separator(app)?;
+
+    let window_menu = Submenu::with_id_and_items(
+        app,
+        "window",
+        "Window",
+        true,
+        &[&minimize, &window_sep, &close_window],
+    )?;
+
+    Menu::with_id_and_items(
+        app,
+        "main",
+        &[&prot_menu, &file_menu, &edit_menu, &view_menu, &window_menu],
+    )
+}
+
+pub fn handle_menu_event(app: &AppHandle<Wry>, event: MenuEvent) {
+    match event.id().as_ref() {
+        "about" => {
+            let version = app.package_info().version.to_string();
+            app.dialog()
+                .message(format!("v{version}\n©Adam Thomas Howard 2024"))
+                .title("Proteus Player")
+                .kind(MessageDialogKind::Info)
+                .show(|_| {});
+        }
+        "new_window" => {
+            file::load(app.clone());
+        }
+        "open" => {
+            file::load(app.clone());
+        }
+        "save" => {
+            app.dialog()
+                .message("Save is not implemented yet.")
+                .title("Save")
+                .kind(MessageDialogKind::Info)
+                .show(|_| {});
+        }
+        "save_as" => {
+            app.dialog()
+                .message("Save As is not implemented yet.")
+                .title("Save As")
+                .kind(MessageDialogKind::Info)
+                .show(|_| {});
+        }
+        "export_prot" => {
+            app.dialog()
+                .message("Export Prot File is not implemented yet.")
+                .title("Export Prot File")
+                .kind(MessageDialogKind::Info)
+                .show(|_| {});
+        }
+        _ => {}
     }
-
-    let mut file_menu = Menu::new();
-    let new_window =
-        CustomMenuItem::new("new_window".to_string(), "New Window").accelerator("CmdOrCtrl+N");
-    let save = CustomMenuItem::new("save".to_string(), "Save").accelerator("CmdOrCtrl+S");
-    let save_as =
-        CustomMenuItem::new("save_as".to_string(), "Save As").accelerator("CmdOrCtrl+Shift+S");
-    let load = CustomMenuItem::new("load".to_string(), "Open").accelerator("CmdOrCtrl+O");
-    file_menu = file_menu.add_item(new_window);
-    file_menu = file_menu.add_native_item(MenuItem::Separator);
-    file_menu = file_menu.add_item(save);
-    file_menu = file_menu.add_item(save_as);
-    file_menu = file_menu.add_item(load);
-    file_menu = file_menu.add_native_item(MenuItem::Separator);
-
-    let export_sub_menu = Menu::new()
-        .add_item(CustomMenuItem::new(
-            "export_prot",
-            "Export Prot File",
-        ).accelerator("CmdOrCtrl+Shift+E"));
-
-    file_menu = file_menu.add_submenu(Submenu::new("Export", export_sub_menu));
-    file_menu = file_menu.add_native_item(MenuItem::Separator);
-
-    file_menu = file_menu.add_native_item(MenuItem::CloseWindow);
-
-
-    
-    #[cfg(not(target_os = "macos"))]
-    {
-      file_menu = file_menu.add_native_item(MenuItem::Quit);
-    }
-    menu = menu.add_submenu(Submenu::new("File", file_menu));
-
-    #[cfg(not(target_os = "linux"))]
-    let mut edit_menu = Menu::new();
-    #[cfg(target_os = "macos")]
-    {
-      edit_menu = edit_menu.add_native_item(MenuItem::Undo);
-      edit_menu = edit_menu.add_native_item(MenuItem::Redo);
-      edit_menu = edit_menu.add_native_item(MenuItem::Separator);
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-      edit_menu = edit_menu.add_native_item(MenuItem::Cut);
-      edit_menu = edit_menu.add_native_item(MenuItem::Copy);
-      edit_menu = edit_menu.add_native_item(MenuItem::Paste);
-    }
-    #[cfg(target_os = "macos")]
-    {
-      edit_menu = edit_menu.add_native_item(MenuItem::SelectAll);
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-      menu = menu.add_submenu(Submenu::new("Edit", edit_menu));
-    }
-    #[cfg(target_os = "macos")]
-    {
-      menu = menu.add_submenu(Submenu::new(
-        "View",
-        Menu::new().add_native_item(MenuItem::EnterFullScreen),
-      ));
-    }
-
-    let mut window_menu = Menu::new();
-    window_menu = window_menu.add_native_item(MenuItem::Minimize);
-    #[cfg(target_os = "macos")]
-    {
-      window_menu = window_menu.add_native_item(MenuItem::Zoom);
-      window_menu = window_menu.add_native_item(MenuItem::Separator);
-    }
-    window_menu = window_menu.add_native_item(MenuItem::CloseWindow);
-    menu = menu.add_submenu(Submenu::new("Window", window_menu));
-
-    menu
-  }
-
-pub fn get_menu() -> Menu {
-    let default_menu = make_menu("Proteus Author");
-    let main_menu = Menu::with_items(default_menu.items);
-
-    return main_menu;
 }

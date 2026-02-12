@@ -1,15 +1,15 @@
-use tauri::{AppHandle, Theme, Window, WindowBuilder, WindowUrl};
+use tauri::{AppHandle, Theme, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use uuid::Uuid;
 
-pub fn create_window(handle: &AppHandle) -> Window {
+pub fn create_window(handle: &AppHandle) -> WebviewWindow {
     // Make unused label
 
     let id = Uuid::new_v4();
     let label = format!("window-{}", id.to_string());
 
-    let window = WindowBuilder::new(handle, label, WindowUrl::App("index.html".into()))
+    let window = WebviewWindowBuilder::new(handle, label, WebviewUrl::App("index.html".into()))
         .title("Proteus Player")
-        .inner_size(350.0, 100.0)
+        .inner_size(350.0, 130.0)
         .resizable(false)
         .theme(Some(Theme::Dark))
         .build()
