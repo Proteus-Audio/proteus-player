@@ -126,6 +126,13 @@ const playPause = async () => {
   }
 }
 
+const handleKeyDown = (event: KeyboardEvent) => {
+  if (event.code !== 'Space' || event.repeat) return
+
+  event.preventDefault()
+  void playPause()
+}
+
 const reset = async () => {
   await invoke('stop')
 }
@@ -147,6 +154,8 @@ const unlisteners = ref<(() => void)[]>([])
 // })
 
 onMounted(async () => {
+  window.addEventListener('keydown', handleKeyDown)
+
   const currentWindow = getCurrentWindow()
   const emitTarget = {
     target: {
@@ -203,6 +212,8 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown)
+
   if (unlisten.value) {
     unlisten.value()
   }
