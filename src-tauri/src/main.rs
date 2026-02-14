@@ -47,9 +47,7 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("error while running tauri application");
 
-    let window = window::create_window(&app.handle());
-
-    file::load_in_window(&app.handle(), &window.label());
+    file::load(app.handle().clone());
 
     app.run(|_app_handle, event| match event {
         tauri::RunEvent::ExitRequested { api, .. } => {
@@ -60,9 +58,7 @@ fn main() {
             ..
         } => {
             if !has_visible_windows {
-                let window = window::create_window(_app_handle);
-
-                file::load_in_window(_app_handle, &window.label());
+                file::load(_app_handle.clone());
             }
         }
         _ => {}

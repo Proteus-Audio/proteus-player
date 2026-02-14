@@ -126,6 +126,37 @@ const playPause = async () => {
   }
 }
 
+const seekBySeconds = async (offset: number) => {
+  const maxTime = duration.value ?? Number.POSITIVE_INFINITY
+  const nextTime = Math.max(0, Math.min(maxTime, currentTime.value + offset))
+  await invoke('seek', { position: nextTime })
+}
+
+const handleKeyDown = (event: KeyboardEvent) => {
+  if (event.repeat) return
+
+  switch (event.code) {
+    case 'Space':
+      event.preventDefault()
+      void playPause()
+      break
+    case 'ArrowRight':
+      event.preventDefault()
+      void seekBySeconds(5)
+      break
+    case 'ArrowLeft':
+      event.preventDefault()
+      void seekBySeconds(-5)
+      break
+    // case 's':
+    //   event.preventDefault()
+    //   void shuffle()
+    //   break
+    default:
+      break
+  }
+}
+
 const reset = async () => {
   await invoke('stop')
 }
@@ -147,6 +178,8 @@ const unlisteners = ref<(() => void)[]>([])
 // })
 
 onMounted(async () => {
+  window.addEventListener('keydown', handleKeyDown)
+
   const currentWindow = getCurrentWindow()
   const emitTarget = {
     target: {
@@ -203,6 +236,8 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown)
+
   if (unlisten.value) {
     unlisten.value()
   }
@@ -243,6 +278,7 @@ html {
       font-size: 1rem;
       font-weight: normal;
       color: #9e9e9e;
+      background-color: #1f1f1f;
       max-height: 100px;
       height: 100px;
       overflow: hidden;
