@@ -17,3 +17,20 @@ pub fn create_window(handle: &AppHandle) -> WebviewWindow {
 
     window
 }
+
+pub fn create_dialog_parent_window(handle: &AppHandle) -> WebviewWindow {
+    let id = Uuid::new_v4();
+    let label = format!("dialog-parent-{}", id);
+
+    WebviewWindowBuilder::new(handle, label, WebviewUrl::App("index.html".into()))
+        .title("Proteus Player")
+        .inner_size(10.0, 10.0)
+        .resizable(false)
+        .decorations(false)
+        .visible(false)
+        .focused(false)
+        .skip_taskbar(true)
+        .theme(Some(Theme::Dark))
+        .build()
+        .unwrap()
+}

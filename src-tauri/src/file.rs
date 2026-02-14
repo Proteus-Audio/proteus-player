@@ -2,19 +2,31 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::state::Windows;
-use crate::window::create_window;
+use crate::window::{create_dialog_parent_window, create_window};
 use proteus_lib::diagnostics::reporter::Report;
+use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 use tauri::Emitter;
 use tauri::{AppHandle, State};
 use tauri::{EventTarget, Manager, WebviewWindow};
-use tauri_plugin_dialog::DialogExt;
 
 #[tauri::command]
 pub fn load(handle: AppHandle) {
-    let new_window = create_window(&handle);
+    let dialog_parent = create_dialog_parent_window(&handle);
+    let file_path = FileDialog::new()
+        .set_parent(&dialog_parent)
+        .add_filter("Prot File", &["prot"])
+        .pick_file();
 
-    load_in_window(&handle, new_window.label());
+    dialog_parent.close().ok();
+
+    let path = match to_system_path(file_path) {
+        Some(path) => path,
+        None => return,
+    };
+
+    let new_window = create_window(&handle);
+    load_path_in_window(&handle, new_window.label(), path);
 }
 
 #[tauri::command]
@@ -29,84 +41,62 @@ struct LoadPayload {
     window_label: String,
 }
 
-pub fn load_in_window(handle: &AppHandle, window_label: &str) {
-    let window = handle.get_webview_window(&window_label).unwrap();
+fn to_system_path(file_path: Option<std::path::PathBuf>) -> Option<std::path::PathBuf> {
+    file_path
+}
+
+fn load_path_in_window(handle: &AppHandle, window_label: &str, path: std::path::PathBuf) {
+    let window = handle.get_webview_window(window_label).unwrap();
+    let state: State<Mutex<Windows>> = window.state();
+    let mut players = state.lock().unwrap();
+
+    players.add(
+        window_label.to_string(),
+        &path.to_str().unwrap().to_string(),
+    );
+
+    let mut player = players.get(window_label).unwrap().lock().unwrap();
+
+    let window_label_clone = window_label.to_string();
     let handle_clone = handle.clone();
-    let window_label = window_label.to_string();
-    let load_dialog = window.dialog().file().add_filter("Prot File", &["prot"]);
+    let reporter = move |Report {
+                             time,
+                             volume,
+                             duration,
+                             playing,
+                         }| {
+        let report = serde_json::json!({
+            "time": time,
+            "volume": volume,
+            "duration": duration,
+            "playing": playing
+        });
 
-    load_dialog.pick_file(move |file_path| {
-        if file_path.is_none() {
-            window.close().unwrap();
-            return;
-        }
-
-        let state: State<Mutex<Windows>> = window.state();
-        let path_option = match file_path {
-            Some(path) => path,
-            None => {
-                println!("Missing file path");
-                return;
-            }
-        };
-
-        let path = match path_option.as_path() {
-            Some(path) => path,
-            None => {
-                println!("Missing file path");
-                return;
-            }
-        };
-
-        let mut players = state.lock().unwrap();
-
-        players.add(
-            window_label.to_string(),
-            &path.to_str().unwrap().to_string(),
-        );
-
-        let mut player = players.get(&window_label).unwrap().lock().unwrap();
-
-        let window_label_clone = window_label.clone();
-        let reporter = move |Report {
-                                 time,
-                                 volume,
-                                 duration,
-                                 playing,
-                             }| {
-            let report = serde_json::json!({
-                "time": time,
-                "volume": volume,
-                "duration": duration,
-                "playing": playing
-            });
-
-            handle_clone
-                .emit_to(
-                    EventTarget::webview_window(&window_label_clone),
-                    "UPDATE_STATUS",
-                    report,
-                )
-                .expect("failed to emit event");
-        };
-
-        player.set_reporting(Arc::new(Mutex::new(reporter)), Duration::from_millis(100));
-
-        let duration = player.get_duration();
-        let title = path.file_name().unwrap().to_str().unwrap();
-
-        window.set_title(title).unwrap();
-
-        let payload = LoadPayload {
-            path: path.to_str().unwrap().to_string(),
-            duration: duration as u32,
-            window_label: window_label.to_string(),
-        };
-
-        window
-            .emit_to(&window_label, "LOAD_FILE", payload)
+        handle_clone
+            .emit_to(
+                EventTarget::webview_window(&window_label_clone),
+                "UPDATE_STATUS",
+                report,
+            )
             .expect("failed to emit event");
-    });
+    };
+
+    player.set_reporting(Arc::new(Mutex::new(reporter)), Duration::from_millis(100));
+
+    let duration = player.get_duration();
+    let title = path.file_name().unwrap().to_str().unwrap();
+
+    window.set_title(title).unwrap();
+
+    let payload = LoadPayload {
+        path: path.to_str().unwrap().to_string(),
+        duration: duration as u32,
+        window_label: window_label.to_string(),
+    };
+
+    window
+        .emit_to(window_label, "LOAD_FILE", payload)
+        .expect("failed to emit event");
 }
 
 #[tauri::command]
