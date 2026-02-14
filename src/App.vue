@@ -278,6 +278,7 @@ html {
       font-size: 1rem;
       font-weight: normal;
       color: #9e9e9e;
+      background-color: #1f1f1f;
       max-height: 100px;
       height: 100px;
       overflow: hidden;
