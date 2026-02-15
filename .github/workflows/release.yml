@@ -57,7 +57,7 @@ jobs:
 
       - name: Install Windows ARM Tauri CLI native binding
         if: matrix.target == 'aarch64-pc-windows-msvc'
-        run: npm install --no-save --no-package-lock @tauri-apps/cli-win32-arm64-msvc@2.10.0
+        run: npm install --no-save --no-package-lock --legacy-peer-deps @tauri-apps/cli-win32-arm64-msvc@2.10.0
 
       - name: Build and publish
         uses: tauri-apps/tauri-action@v0.6.1
