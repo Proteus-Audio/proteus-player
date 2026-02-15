@@ -53,6 +53,7 @@ fn main() {
         tauri::RunEvent::ExitRequested { api, .. } => {
             api.prevent_exit();
         }
+        #[cfg(target_os = "macos")]
         tauri::RunEvent::Reopen {
             has_visible_windows,
             ..
