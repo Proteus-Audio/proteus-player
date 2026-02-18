@@ -1,6 +1,6 @@
 [package]
 name = "proteus-player"
-version = "0.2.6"
+version = "0.2.7"
 description = "A Tauri App"
 authors = ["Adam Thomas Howard"]
 license = ""
@@ -20,7 +20,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 # proteus_audio = "0.2.0"
 # proteus_audio = { path = "/Users/innocentsmith/Dev/rust/proteus-cli" }
-proteus-lib = { version = "0.5.10" }
+proteus-lib = { version = "0.5.11" }
 # proteus-lib = { path = "../../../rust/proteus/proteus-lib", version = "0.5.9" }
 
 uuid = { version = "1.20.0", features = ["v4"] }
