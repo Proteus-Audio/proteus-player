@@ -1,6 +1,6 @@
 [package]
 name = "proteus-player"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2024"
 description = "Proteus Player desktop audio player"
 license = "PolyForm Small Business License"
