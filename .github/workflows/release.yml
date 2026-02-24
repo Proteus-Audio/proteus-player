@@ -15,16 +15,21 @@ jobs:
   prepare-release:
     runs-on: ubuntu-latest
     outputs:
+      version: ${{ steps.version.outputs.version }}
       release_body: ${{ steps.build_notes.outputs.release_body }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Read package version
+      - name: Read Cargo package version
         id: version
         run: |
-          VERSION="$(grep -m1 '"version"' package.json | sed -E 's/.*"version": "([^"]+)".*/\1/')"
+          VERSION="$(awk -F'"' '/^\[package\]/{in_package=1;next} in_package && /^version = /{print $2; exit}' Cargo.toml)"
+          if [ -z "$VERSION" ]; then
+            echo "Could not determine package version from Cargo.toml" >&2
+            exit 1
+          fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Generate release notes
@@ -51,32 +56,60 @@ jobs:
             echo "${DELIM}"
           } >> "$GITHUB_OUTPUT"
 
-  publish-tauri:
+  create-release:
     needs: prepare-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+          RELEASE_BODY: ${{ needs.prepare-release.outputs.release_body }}
+        run: |
+          TAG="${RELEASE_TAG_PREFIX}${VERSION}"
+          TITLE="Proteus Player v${VERSION}"
+
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release edit "${TAG}" --title "${TITLE}" --notes "${RELEASE_BODY}"
+          else
+            gh release create "${TAG}" --title "${TITLE}" --notes "${RELEASE_BODY}"
+          fi
+
+  publish-iced:
+    needs: [prepare-release, create-release]
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: macos-14
             target: aarch64-apple-darwin
+            kind: macos
+            formats: app,dmg
           - platform: macos-15-intel
             target: x86_64-apple-darwin
+            kind: macos
+            formats: app,dmg
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
+            kind: linux
+            formats: deb,appimage,pacman
           - platform: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
+            kind: linux
+            formats: deb,appimage,pacman
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
+            kind: windows
+            formats: nsis,wix
           - platform: windows-11-arm
             target: aarch64-pc-windows-msvc
+            kind: windows
+            formats: nsis,wix
 
     runs-on: ${{ matrix.platform }}
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -84,39 +117,120 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Install Linux system dependencies
-        if: startsWith(matrix.platform, 'ubuntu-')
+        if: matrix.kind == 'linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             pkg-config \
             libasound2-dev \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
+            fakeroot \
+            dpkg-dev \
+            rpm \
             patchelf
+          sudo apt-get install -y libfuse2 || sudo apt-get install -y libfuse2t64
 
-      - name: Install frontend dependencies
-        run: bun install --frozen-lockfile
+      - name: Install Windows packaging tools
+        if: matrix.kind == 'windows'
+        shell: pwsh
+        run: choco install wixtoolset nsis -y
 
-      - name: Install Windows ARM Tauri CLI native binding
-        if: matrix.target == 'aarch64-pc-windows-msvc'
-        run: npm install --no-save --no-package-lock --legacy-peer-deps @tauri-apps/cli-win32-arm64-msvc@2.10.0
+      - name: Install cargo-packager
+        run: cargo install cargo-packager --locked
 
-      - name: Build and publish
-        uses: tauri-apps/tauri-action@v0.6.1
+      - name: Build and package (macOS/Linux)
+        if: matrix.kind != 'windows'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tauriScript: bun run tauri
-          tagName: ${{ env.RELEASE_TAG_PREFIX }}__VERSION__
-          releaseName: 'Proteus Player v__VERSION__'
-          releaseBody: ${{ needs.prepare-release.outputs.release_body }}
-          releaseDraft: false
-          prerelease: false
-          args: --target ${{ matrix.target }}
+          TARGET: ${{ matrix.target }}
+          FORMATS: ${{ matrix.formats }}
+        run: cargo packager --release --target-triple "$TARGET" --formats "$FORMATS"
+
+      - name: Build and package (Windows)
+        if: matrix.kind == 'windows'
+        env:
+          TARGET: ${{ matrix.target }}
+          FORMATS: ${{ matrix.formats }}
+        shell: pwsh
+        run: cargo packager --release --target-triple $env:TARGET --formats $env:FORMATS
+
+      - name: Collect package artifacts (macOS/Linux)
+        if: matrix.kind != 'windows'
+        id: collect_unix
+        env:
+          TARGET: ${{ matrix.target }}
+          KIND: ${{ matrix.kind }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          find target -type f \( \
+              -name '*.dmg' -o \
+              -name '*.deb' -o \
+              -name '*.AppImage' -o \
+              -name '*.appimage' -o \
+              -name '*.tar.gz' -o \
+              -name 'PKGBUILD' -o \
+              -name '*.PKGBUILD' \
+            \) -exec cp {} dist/ \;
+
+          if [ "$KIND" = "macos" ]; then
+            while IFS= read -r app_bundle; do
+              bundle_name="$(basename "$app_bundle")"
+              archive_name="dist/${bundle_name}.zip"
+              ditto -c -k --sequesterRsrc --keepParent "$app_bundle" "$archive_name"
+            done < <(find target -type d -name '*.app')
+          fi
+
+          if [ -z "$(ls -A dist)" ]; then
+            echo "No packaged artifacts were produced." >&2
+            exit 1
+          fi
+
+          echo "dist_dir=dist" >> "$GITHUB_OUTPUT"
+
+      - name: Collect package artifacts (Windows)
+        if: matrix.kind == 'windows'
+        id: collect_windows
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Get-ChildItem -Path target -Recurse -File |
+            Where-Object {
+              ($_.Extension -eq ".msi") -or
+              ($_.Extension -eq ".exe" -and $_.Name -ne "proteus-player.exe")
+            } |
+            ForEach-Object { Copy-Item $_.FullName -Destination dist -Force }
+
+          if (-not (Get-ChildItem -Path dist -File | Select-Object -First 1)) {
+            throw "No packaged artifacts were produced."
+          }
+
+          "dist_dir=dist" >> $env:GITHUB_OUTPUT
+
+      - name: Upload artifact (macOS/Linux)
+        if: matrix.kind != 'windows'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+          DIST_DIR: ${{ steps.collect_unix.outputs.dist_dir }}
+        run: |
+          TAG="${RELEASE_TAG_PREFIX}${VERSION}"
+          gh release upload "${TAG}" "${DIST_DIR}"/* --clobber
+
+      - name: Upload artifact (Windows)
+        if: matrix.kind == 'windows'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+          DIST_DIR: ${{ steps.collect_windows.outputs.dist_dir }}
+        shell: pwsh
+        run: |
+          $tag = "$env:RELEASE_TAG_PREFIX$env:VERSION"
+          Get-ChildItem -Path $env:DIST_DIR -File | ForEach-Object {
+            gh release upload $tag $_.FullName --clobber
+          }
 
   publish-downloads-manifest:
-    needs: publish-tauri
+    needs: [prepare-release, publish-iced]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -124,8 +238,8 @@ jobs:
       - name: Build downloads.json
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare-release.outputs.version }}
         run: |
-          VERSION="$(grep -m1 '"version"' package.json | sed -E 's/.*"version": "([^"]+)".*/\1/')"
           TAG="${RELEASE_TAG_PREFIX}${VERSION}"
 
           gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" > release.json
