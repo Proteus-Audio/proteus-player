@@ -177,19 +177,34 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
           KIND: ${{ matrix.kind }}
+          PRODUCT_NAME: Proteus Player
         run: |
           set -euo pipefail
           mkdir -p dist
 
-          find target -type f \( \
+          while IFS= read -r artifact; do
+            file_name="$(basename "$artifact")"
+
+            case "$file_name" in
+              control.tar.gz|data.tar.gz|debian-binary|PKGBUILD|*.PKGBUILD)
+                continue
+                ;;
+            esac
+
+            output_name="$file_name"
+            if [ "$KIND" = "linux" ]; then
+              output_name="${output_name/#proteus-player/$PRODUCT_NAME}"
+            fi
+
+            cp "$artifact" "dist/$output_name"
+          done < <(find target -type f \( \
               -name '*.dmg' -o \
               -name '*.deb' -o \
               -name '*.AppImage' -o \
               -name '*.appimage' -o \
-              -name '*.tar.gz' -o \
-              -name 'PKGBUILD' -o \
-              -name '*.PKGBUILD' \
-            \) -exec cp {} dist/ \;
+              -name 'proteus-player*.tar.gz' -o \
+              -name '*.pkg.tar*' \
+            \))
 
           if [ "$KIND" = "macos" ]; then
             while IFS= read -r app_bundle; do
