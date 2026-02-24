@@ -19,7 +19,6 @@ muda = "0.16.0"
 proteus-lib = { version = "0.6.1", optional = true }
 # proteus-lib = { path = "../../rust/proteus/proteus-lib", version = "0.5.12", optional = true }
 rfd = "0.17.2"
-slint = "1.15.1"
 sysinfo = { version = "0.37.2", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
