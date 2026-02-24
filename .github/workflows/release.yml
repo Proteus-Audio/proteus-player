@@ -64,6 +64,7 @@ jobs:
       - name: Create or update release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           VERSION: ${{ needs.prepare-release.outputs.version }}
           RELEASE_BODY: ${{ needs.prepare-release.outputs.release_body }}
         run: |
