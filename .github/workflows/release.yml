@@ -113,6 +113,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Disable before-packaging hook in CI (macOS/Linux)
+        if: matrix.kind != 'windows'
+        run: sed -i.bak '/^before-packaging-command = "cargo build --release"$/d' Cargo.toml
+
+      - name: Disable before-packaging hook in CI (Windows)
+        if: matrix.kind == 'windows'
+        shell: pwsh
+        run: |
+          $content = Get-Content Cargo.toml -Raw
+          $updated = $content -replace '(?m)^before-packaging-command = "cargo build --release"\r?\n', ''
+          Set-Content Cargo.toml -Value $updated -NoNewline
+
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -140,8 +152,11 @@ jobs:
         shell: pwsh
         run: choco install wixtoolset nsis -y
 
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+
       - name: Install cargo-packager
-        run: cargo install cargo-packager --locked
+        run: cargo binstall --no-confirm cargo-packager
 
       - name: Build binary for target (macOS/Linux)
         if: matrix.kind != 'windows'
