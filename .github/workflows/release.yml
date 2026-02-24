@@ -210,6 +210,8 @@ jobs:
         if: matrix.kind == 'windows'
         id: collect_windows
         shell: pwsh
+        env:
+          PRODUCT_NAME: Proteus Player
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Get-ChildItem -Path target/release -File |
@@ -217,7 +219,11 @@ jobs:
               ($_.Extension -eq ".msi") -or
               ($_.Name -like "*-setup.exe")
             } |
-            ForEach-Object { Copy-Item $_.FullName -Destination dist -Force }
+            ForEach-Object {
+              $renamed = $_.Name -replace '^proteus-player', $env:PRODUCT_NAME
+              $destination = Join-Path "dist" $renamed
+              Copy-Item -LiteralPath $_.FullName -Destination $destination -Force
+            }
 
           if (-not (Get-ChildItem -Path dist -File | Select-Object -First 1)) {
             throw "No packaged artifacts were produced."
