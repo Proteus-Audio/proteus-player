@@ -1,0 +1,58 @@
+[package]
+name = "proteus-player"
+version = "0.3.2"
+edition = "2024"
+description = "Proteus Player desktop audio player"
+license = "PolyForm Small Business License"
+repository = "https://github.com/innocentsmith/proteus-player"
+
+[features]
+default = ["with-player"]
+with-player = ["dep:proteus-lib"]
+no-player = []
+debug = ["dep:sysinfo"]
+
+[dependencies]
+anyhow = "1.0.100"
+iced = { version = "0.14.0", features = ["image", "svg", "tokio"] }
+muda = "0.16.0"
+proteus-lib = { version = "0.6.1", optional = true }
+# proteus-lib = { path = "../../rust/proteus/proteus-lib", version = "0.5.12", optional = true }
+rfd = "0.17.2"
+sysinfo = { version = "0.37.2", optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.3"
+objc2-app-kit = { version = "0.3.2", features = ["NSApplication", "NSImage", "NSResponder"] }
+objc2-foundation = { version = "0.3.2", features = ["NSData", "NSProcessInfo", "NSString"] }
+
+[package.metadata.packager]
+product-name = "Proteus Player"
+identifier = "com.proteus.player"
+publisher = "Proteus"
+category = "Music"
+homepage = "https://github.com/innocentsmith/proteus-player"
+copyright = "© Adam Thomas Howard 2026"
+icons = [
+  "assets/app-icon/icon.icns",
+  "assets/app-icon/icon.ico",
+  "assets/app-icon/icon.png",
+  "assets/app-icon-32.png",
+]
+resources = [
+  "assets/app-icon-32.png",
+  "assets/icons/*",
+  "assets/app-icon/*",
+]
+before-packaging-command = "cargo build --release"
+out-dir = "target/release"
+
+[package.metadata.packager.macos]
+minimum-system-version = "11.0"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = true
+opt-level = "z"
