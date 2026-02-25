@@ -171,7 +171,7 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
           FORMATS: ${{ matrix.formats }}
-        run: cargo packager --release --target "$TARGET" --formats "$FORMATS"
+        run: cargo packager --release --target "$TARGET" --binaries-dir "target/$TARGET/release" --formats "$FORMATS"
 
       - name: Build binary for target (Windows)
         if: matrix.kind == 'windows'
@@ -186,7 +186,7 @@ jobs:
           TARGET: ${{ matrix.target }}
           FORMATS: ${{ matrix.formats }}
         shell: pwsh
-        run: cargo packager --release --target $env:TARGET --formats $env:FORMATS
+        run: cargo packager --release --target $env:TARGET --binaries-dir "target/$env:TARGET/release" --formats $env:FORMATS
 
       - name: Collect package artifacts (macOS/Linux)
         if: matrix.kind != 'windows'
