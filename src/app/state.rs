@@ -24,6 +24,7 @@ pub(crate) struct PlayerWindowState {
     pub(crate) last_error: Option<String>,
     pub(crate) zoom_factor: f64,
     pub(crate) window_title: String,
+    pub(crate) menu_open: bool,
     timeline_override_until: Option<Instant>,
     volume_override_until: Option<Instant>,
 }
@@ -40,6 +41,7 @@ impl PlayerWindowState {
             last_error: None,
             zoom_factor: 1.0,
             window_title: "Proteus Player".to_owned(),
+            menu_open: false,
             timeline_override_until: None,
             volume_override_until: None,
         };
@@ -209,6 +211,18 @@ impl ProteusApp {
                 }
                 Task::none()
             }
+        }
+    }
+
+    pub(crate) fn toggle_window_menu(&mut self, window_id: window::Id) {
+        if let Some(window) = self.windows.get_mut(&window_id) {
+            window.menu_open = !window.menu_open;
+        }
+    }
+
+    pub(crate) fn close_window_menu(&mut self, window_id: window::Id) {
+        if let Some(window) = self.windows.get_mut(&window_id) {
+            window.menu_open = false;
         }
     }
 

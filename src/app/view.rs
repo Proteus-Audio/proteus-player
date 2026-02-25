@@ -1,12 +1,14 @@
 use iced::widget::{button, column, container, row, slider, svg, text};
-use iced::{Alignment, Element, Length, window};
+use iced::{Alignment, Element, Length, Padding, window};
 
 use crate::app::helpers::format_time;
 use crate::app::messages::Message;
 use crate::app::state::{PlayerWindowState, ProteusApp};
 use crate::app::styles::{
-    ACCENT_TEXT, ERROR_TEXT, background_style, timeline_slider_style, volume_slider_style,
+    ACCENT_TEXT, ERROR_TEXT, background_style, menu_header_style, _menu_surface_style,
+    timeline_slider_style, volume_slider_style,
 };
+use crate::native_menu::MenuAction;
 
 pub(crate) fn view(state: &ProteusApp, window_id: window::Id) -> Element<'_, Message> {
     if let Some(window) = state.windows.get(&window_id) {
@@ -101,7 +103,7 @@ fn window_view<'a>(
     .spacing(6)
     .width(Length::Fixed(ROW_WIDTH));
 
-    let mut content = column![
+    let main_content = column![
         container(timeline)
             .width(Length::Fill)
             .center_x(Length::Fill),
@@ -116,6 +118,11 @@ fn window_view<'a>(
     .width(Length::Fill)
     .height(Length::Fill);
 
+    let mut content = column![
+        main_content,
+        platform_footer(),
+    ];
+
     if let Some(error) = &window.last_error {
         content = content.push(text(error.clone()).size(11).color(ERROR_TEXT));
     } else if let Some(error) = &state.global_error {
@@ -127,4 +134,124 @@ fn window_view<'a>(
         .height(Length::Fill)
         .style(background_style)
         .into()
+}
+
+
+fn platform_footer<'a>() -> Element<'a, Message> {
+    if cfg!(target_os = "macos") {
+        return container(column![])
+            .width(Length::Shrink)
+            .height(Length::Shrink)
+            .into();
+    }
+
+    let content = column![
+        container(
+            row![
+                text("Ctrl+O to open, Ctrl+N for new window")
+                    .size(11)
+                    .color(ACCENT_TEXT)
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center)
+        )
+        .width(Length::Fill)
+        .padding([6, 23])
+        .style(menu_header_style)
+    ]
+    .spacing(4)
+    .width(Length::Fill);
+
+    container(content).width(Length::Fill).into()
+}
+
+fn _platform_menu<'a>(
+    _state: &'a ProteusApp,
+    window: &'a PlayerWindowState,
+    window_id: window::Id,
+) -> Element<'a, Message> {
+    if cfg!(target_os = "macos") {
+        return container(column![])
+            .width(Length::Shrink)
+            .height(Length::Shrink)
+            .into();
+    }
+
+    let menu_button_label = if window.menu_open {
+        "Menu ▴"
+    } else {
+        "Menu ▾"
+    };
+
+    let mut content = column![
+        container(
+            row![
+                button(text(menu_button_label).size(12))
+                    .style(button::text)
+                    .padding([2, 4])
+                    .on_press(Message::_ToggleWindowMenu(window_id)),
+                text("Ctrl+O to open, Ctrl+N for new window")
+                    .size(11)
+                    .color(ACCENT_TEXT)
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center)
+        )
+        .width(Length::Fill)
+        .padding([0, 2])
+        .style(menu_header_style)
+    ]
+    .padding(Padding {
+        top: 0.0,
+        right: 2.0,
+        bottom: 16.0,
+        left: 0.0,
+    })
+    .spacing(4)
+    .width(Length::Fill);
+
+    if window.menu_open {
+        let menu_panel = column![
+            text("File").size(11).color(ACCENT_TEXT),
+            _menu_item("Open…", "Ctrl+O", window_id, MenuAction::Open),
+            _menu_item("New Window", "Ctrl+N", window_id, MenuAction::NewWindow),
+            text("View").size(11).color(ACCENT_TEXT),
+            _menu_item("Zoom In", "Ctrl+=", window_id, MenuAction::ZoomIn),
+            _menu_item("Zoom Out", "Ctrl+-", window_id, MenuAction::ZoomOut),
+            text("Help").size(11).color(ACCENT_TEXT),
+            _menu_item("About Proteus Player", "", window_id, MenuAction::About),
+        ]
+        .spacing(2)
+        .width(Length::Fill);
+
+        content = content.push(
+            container(menu_panel)
+                .padding(8)
+                .width(Length::Fill)
+                .style(_menu_surface_style),
+        );
+    }
+
+    container(content).width(Length::Fill).into()
+}
+
+fn _menu_item<'a>(
+    label: &'a str,
+    shortcut: &'a str,
+    window_id: window::Id,
+    action: MenuAction,
+) -> Element<'a, Message> {
+    button(
+        row![
+            text(label).size(12).width(Length::Fill),
+            text(shortcut).size(11).color(ACCENT_TEXT)
+        ]
+        .align_y(Alignment::Center)
+        .width(Length::Fill),
+    )
+    .style(button::text)
+    .padding([2, 4])
+    .width(Length::Fill)
+    .on_press(Message::_WindowMenuAction { window_id, action })
+    .into()
 }

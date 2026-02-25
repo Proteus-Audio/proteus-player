@@ -134,6 +134,16 @@ fn update(state: &mut ProteusApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        Message::_ToggleWindowMenu(window_id) => {
+            state.set_focused_window(window_id);
+            state.toggle_window_menu(window_id);
+            Task::none()
+        }
+        Message::_WindowMenuAction { window_id, action } => {
+            state.set_focused_window(window_id);
+            state.close_window_menu(window_id);
+            state.handle_menu_action(action)
+        }
         Message::CloseWindowShortcut(window_id) => {
             state.close_window_state(window_id);
             window::close(window_id)
