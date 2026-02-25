@@ -1,6 +1,6 @@
-# AGENTS.md — Rust + Slint GUI Agent Guide
+# AGENTS.md — Rust + Iced GUI Agent Guide
 
-This repository contains a Rust GUI application built with **Slint**.
+This repository contains a Rust desktop GUI application built with **Iced** (currently `iced 0.14`) and a small set of platform integrations (`muda`, `rfd`, macOS app APIs).
 This document defines expectations and working rules for any coding agent contributing to the codebase.
 
 The agent must prioritize:
@@ -8,8 +8,53 @@ The agent must prioritize:
 - Maintainability
 - Clear architecture boundaries
 - Idiomatic Rust
-- Idiomatic Slint usage
+- Idiomatic Iced usage
 - Small, reviewable changes
+
+---
+
+# Project-Specific Architecture (Current Repo)
+
+The current app is organized around a message-driven Iced architecture:
+
+- `src/main.rs`
+  - Process startup
+  - macOS app naming setup
+  - initial CLI parsing (`--open`)
+  - delegates to `app::run(...)`
+
+- `src/app/mod.rs`
+  - Iced `daemon(...)` wiring
+  - top-level `update`, `view`, `subscription`
+  - app title/theme/scale hooks
+
+- `src/app/messages.rs`
+  - `Message` enum (UI intents + window events + shortcut events + effect results)
+
+- `src/app/state.rs`
+  - root app state (`ProteusApp`)
+  - per-window state (`PlayerWindowState`)
+  - state transitions and orchestration
+
+- `src/app/view.rs`
+  - pure widget tree construction
+  - maps state to `Element<Message>`
+
+- `src/app/effects.rs`
+  - side effects and platform/UI integration
+  - dialogs (`rfd`)
+  - window creation settings
+  - macOS app icon setup
+
+- `src/playback.rs`
+  - playback adapter/wrapper around `proteus-lib`
+  - domain-ish API for load/play/seek/status
+
+- `src/native_menu.rs`
+  - native menu integration (`muda`)
+  - maps menu events to app-level actions
+
+Prefer preserving and strengthening this structure instead of collapsing concerns into `main.rs` or `app/mod.rs`.
 
 ---
 
@@ -17,20 +62,19 @@ The agent must prioritize:
 
 ## Separation of Concerns (Non-Negotiable)
 
-UI and business logic must be clearly separated.
+UI rendering, state transitions, and side effects must remain clearly separated.
 
-- `.slint` files define layout, styling, and UI structure.
-- Rust code defines:
-  - domain logic
-  - state transitions
-  - services (I/O, network, persistence)
-  - orchestration
+- `view.rs` defines layout and widget composition only.
+- `messages.rs` defines intent/event types.
+- `state.rs` owns application state and synchronous state transitions.
+- `effects.rs` owns side effects (dialogs, window creation, platform integration).
+- `playback.rs` encapsulates playback API interaction.
 
 **Hard rule:**  
-`.slint` files must not contain business logic beyond simple property bindings and UI-level behavior.
+Do not perform filesystem, network, dialog, OS API, or heavy playback setup work directly inside `view` code.
 
 **Rule of thumb:**  
-If code touches the filesystem, network, database, timers, or complex state transitions, it belongs in Rust — not in Slint.
+If code touches the filesystem, OS dialogs, native platform APIs, or asynchronous work, it belongs in `effects.rs` (or another service module), triggered via `Task`.
 
 ---
 
@@ -42,130 +86,126 @@ Avoid "god files."
 - If a file exceeds ~600 lines, refactor.
 - Split by:
   - Feature
-  - Screen
   - Domain area
-  - Component
+  - UI concern
+  - Side-effect surface
 
-Large `.slint` files should be split into reusable components.
-
-Large Rust modules should be decomposed into cohesive submodules.
-
----
-
-# Suggested Project Structure
-
-Adapt as needed, but maintain architectural clarity:
-
-```
-src/
-main.rs
-app/
-state/
-domain/
-services/
-ui/
-ui/
-main_window.slint
-components/
-```
-
-
-### Responsibilities
-
-- `main.rs`  
-  Application startup, wiring UI to Rust logic.
-
-- `ui/*.slint`  
-  Pure UI components and layout definitions.
-
-- `state/`  
-  App state structs and state transitions.
-
-- `domain/`  
-  Business logic and core models (no Slint dependencies).
-
-- `services/`  
-  Side effects (filesystem, network, database, time).
-
-**Hard rule:** `domain/` must not depend on Slint.
+If `src/app/mod.rs` grows, prefer moving logic into:
+- `state/` or additional `app/*` modules
+- feature-specific update helpers
+- dedicated service/effects modules
 
 ---
 
-# Slint Best Practices
+# Iced Best Practices (Repo-Enforced)
 
-## Keep Slint Declarative
+## Keep `view` Pure
 
-Slint is declarative UI. Use it as such.
+`view` functions should be deterministic and side-effect free.
 
-- Use property bindings instead of imperative updates where possible.
-- Avoid embedding complex logic in callbacks.
-- Keep logic inside `.slint` limited to UI concerns.
+- Build widgets from current state.
+- Emit `Message` values for user intent.
+- Avoid mutating state in `view`.
+- Avoid expensive work in `view` (I/O, decoding, allocations in loops when avoidable).
+
+Do not open dialogs, create windows, or call playback APIs from `view`.
 
 ---
 
-## Data Flow Direction
+## Message-Driven Data Flow
 
 Preferred architecture:
 
-Rust State → Slint Properties → UI  
-UI Events → Rust Callbacks → State Updates → Property Updates
+State -> `view(state)` -> Widgets  
+User/System Event -> `Message` -> `update(state, message)` -> `Task<Message>`  
+Task Result -> `Message` -> `update(...)`
+
+Keep this flow explicit and easy to trace.
 
 Avoid:
-- Mutating Rust state directly from arbitrary closures.
-- Embedding logic in `.slint` that duplicates Rust logic.
+- hidden mutations in helpers
+- side effects buried in widget closures
+- duplicating state transition logic across match arms
 
 ---
 
-## Property Binding Discipline
+## `update` Discipline
 
-- Prefer binding properties instead of manually synchronizing values.
-- Avoid circular bindings.
-- Keep derived properties computed in Rust if they are complex.
+`update` is the state transition boundary.
 
----
+- Mutate state synchronously and predictably.
+- Return `Task<Message>` for side effects.
+- Use `Task::batch` when multiple effects must be scheduled.
+- Prefer small helper methods on `ProteusApp` / feature state for repeated transitions.
 
-## Callbacks
-
-- Define callbacks in `.slint` for user interactions.
-- Connect them in Rust using `on_<callback_name>()`.
-- Callbacks should:
-  - Emit intent
-  - Not implement full logic inline
-
-Example pattern:
-
-- Slint defines: `callback save_clicked();`
-- Rust connects: `ui.on_save_clicked(move || { ... })`
-
-Complex logic must live in Rust modules.
+Keep `update` readable:
+- group related `Message` arms
+- avoid giant inline blocks
+- delegate to `state.rs` methods when logic grows
 
 ---
 
-## Avoid Blocking the UI Thread
+## `Task` / Async Effects
 
-- Never perform file/network I/O in a Slint callback directly.
-- Spawn background tasks (threads or async runtime).
-- Send results back to UI safely (e.g., via `invoke_from_event_loop`).
+Use `Task` for side effects and asynchronous work.
 
----
-
-## Thread Safety
-
-Slint UI components are generally not `Send`.
+- `Task::perform(...)` for async/background operations.
+- `Task::done(...)` for immediate results.
+- `Task::batch(...)` for multiple follow-up effects.
 
 Rules:
-- UI must only be updated on the main thread.
-- Use `slint::invoke_from_event_loop` to update UI from background threads.
-- Never share UI handles across threads without proper coordination.
+- Do not block the UI thread inside `update`.
+- Do not run long-running I/O or CPU work synchronously in response to UI events.
+- Route effect results back into `Message`.
+
+Platform note:
+- This repo already uses sync dialog opening on macOS in one path and async task-based dialog opening elsewhere. Preserve that platform-specific reasoning unless you verify a better cross-platform behavior.
 
 ---
 
-## Component Design
+## `Subscription` Discipline
 
-- Break UI into reusable components.
-- Avoid massive top-level `.slint` files.
-- Use clear, stable property interfaces between components.
-- Keep components cohesive.
+Subscriptions should describe event sources, not perform logic.
+
+- Keep subscription construction declarative.
+- Map events to `Message`.
+- Put interpretation logic in helpers (as done for keyboard shortcuts).
+- Avoid mutating state from subscription callbacks.
+
+Be careful with high-frequency subscriptions (like the 16ms tick):
+- keep per-tick work minimal
+- avoid repeated expensive allocations
+- move expensive sampling/processing behind throttling or state guards
+
+---
+
+## Multi-Window State Management (Important in This Repo)
+
+This app supports multiple windows keyed by `iced::window::Id`.
+
+Rules:
+- Keep per-window data in a dedicated window state struct.
+- Use `window::Id` to route UI events and shortcuts.
+- Ensure cleanup happens when windows close (e.g., playback shutdown).
+- Keep focused-window tracking explicit and updated from window events.
+
+When adding features:
+- decide whether state is global (`ProteusApp`) or per-window (`PlayerWindowState`)
+- do not accidentally store per-window UI state globally
+
+---
+
+## Widget Styling and UI Modules
+
+The current project uses `src/app/styles.rs` for theme constants and widget style functions.
+
+- Keep reusable style functions in `styles.rs`.
+- Keep `view.rs` focused on composition/layout.
+- Avoid scattering color constants and magic dimensions across multiple files.
+
+If UI complexity grows:
+- split reusable widget builders/components into new modules (for example `app/widgets/*`)
+- keep message interfaces explicit
 
 ---
 
@@ -173,19 +213,19 @@ Rules:
 
 ## Ownership and Borrowing
 
-- Avoid unnecessary cloning.
+- Avoid unnecessary cloning (especially icons, strings, and large state).
 - Prefer borrowing where possible.
-- Use `Arc` only when needed.
+- Use `Arc` only when cross-thread/shared ownership is necessary.
 - Do not introduce `Rc<RefCell<...>>` without clear justification.
 
 ---
 
 ## Error Handling
 
-- Use `thiserror` for structured errors.
-- Use `anyhow` only at application boundaries (if chosen).
+- Use structured errors where practical (`thiserror` is preferred for reusable error types).
+- `anyhow` is acceptable at app/service boundaries and integration layers (already used in this repo).
 - Never `unwrap()` in non-test code unless guaranteed safe and documented.
-- Surface user-facing errors clearly in the UI.
+- Surface user-facing errors in state so `view` can render them clearly.
 
 ---
 
@@ -193,47 +233,90 @@ Rules:
 
 - No mutable statics.
 - No hidden singletons.
-- Pass state explicitly.
+- Pass state explicitly through `ProteusApp`, modules, and helpers.
 
 ---
 
 ## State Management
 
-Keep a single root state struct (e.g., `AppState`).
+Keep a single root state struct (`ProteusApp`) and split by responsibility.
 
-Split logically into feature-specific structs if needed:
+Example pattern for this repo:
 
-```.slint
-AppState {
-  settings: SettingsState,
-  editor: EditorState,
-  session: SessionState,
+```rust
+struct ProteusApp {
+    windows: HashMap<window::Id, PlayerWindowState>,
+    focused_window: Option<window::Id>,
+    native_menu: Option<NativeMenu>,
+    global_error: Option<String>,
+    // ...
 }
 ```
 
-
-State mutations should:
-- Be centralized
-- Be predictable
-- Be easy to test
+State mutations should be:
+- centralized
+- predictable
+- easy to test
+- explicit about global vs per-window scope
 
 ---
 
-## Testing Strategy
+# Concurrency and Threading
 
-GUI code is hard to test; logic is not.
+## Do Not Block the UI Thread
 
-- Put testable logic in `domain/` and `state/`.
+- No long filesystem/network/dialog/playback setup calls in `view`.
+- Keep `update` fast.
+- Move heavy work into `Task::perform` or dedicated worker threads/services when needed.
+
+---
+
+## Thread Safety (Iced + Native Integrations)
+
+- Assume UI-facing state is main-thread owned.
+- Do not mutate UI state from background threads directly.
+- Return results through `Task<Message>` / message passing.
+- Respect platform threading constraints (especially macOS AppKit calls).
+
+If introducing threads:
+- keep non-`Send` UI values out of thread closures
+- communicate using channels/messages
+- re-enter the app through `Message`
+
+---
+
+# Platform Integration Guidelines
+
+This repo includes platform-specific behavior (macOS menu/app icon/name).
+
+- Keep `#[cfg(...)]` branches localized and readable.
+- Prefer wrapper functions in `effects.rs` / platform modules over sprinkling OS-specific code throughout the app.
+- Preserve cross-platform behavior parity when adding features, or document intentional differences.
+
+Native menu handling (`muda`) should remain an integration layer:
+- map menu IDs to semantic actions
+- convert actions into app messages/state transitions
+- avoid embedding app logic inside `native_menu.rs`
+
+---
+
+# Testing Strategy
+
+GUI rendering is harder to test directly; logic is not.
+
+- Put testable logic in `state.rs`, `playback.rs`, and pure helpers.
 - Unit test:
-  - Parsers
-  - Validators
-  - Reducers
-  - State transitions
-- Keep `.slint` files thin so logic is testable outside the UI.
+  - message-to-state transitions (where practical)
+  - formatting helpers
+  - validation/parsing
+  - playback wrapper behavior (especially feature-flag behavior)
+- Keep `view` thin so most behavior is testable outside widget construction.
+
+When adding non-trivial logic to `update`, consider extracting a pure helper that can be unit tested.
 
 ---
 
-## Formatting and Linting
+# Formatting and Linting
 
 Before considering work complete:
 
@@ -248,55 +331,56 @@ No new warnings should be introduced.
 
 # Performance Guidelines
 
-- Avoid repeated allocations in tight UI update loops.
-- Cache derived data if expensive.
-- Avoid unnecessary cloning of large data structures.
-- Keep UI updates minimal and targeted.
+- Avoid repeated allocations in high-frequency UI paths (especially per-tick refresh logic).
+- Keep `Message` payloads lean and intentional.
+- Cache derived data only when measurement shows it matters.
+- Keep UI updates minimal and targeted per window.
+- Avoid cloning large strings/state just to satisfy a match arm; restructure borrows instead.
 
 ---
 
 # Documentation-First Development (Required)
 
-Before implementing or modifying functionality that depends on Slint or any third-party crate:
+Before implementing or modifying functionality that depends on Iced or any third-party crate:
 
-1. **Search the crate documentation first.**
+1. **Search crate documentation first.**
    - Read official API docs on `docs.rs`.
-   - Review macro usage and generated Rust bindings.
-   - Study property, callback, and threading documentation carefully.
+   - Confirm exact types and signatures (`Task`, `Subscription`, `Element`, widget builders).
+   - Verify thread-safety and runtime behavior before introducing async or threads.
 
-2. **Read Slint language documentation.**
-   - Understand:
-     - Property bindings
-     - Animations
-     - Callbacks
-     - Models
-     - Threading constraints
-   - Confirm correct syntax and idioms before writing `.slint` code.
+2. **Read Iced documentation/examples for the specific feature.**
+   - Focus on:
+     - `daemon` / application wiring
+     - `Task`
+     - `Subscription`
+     - multi-window APIs (`iced::window`)
+     - keyboard/event handling
+     - styling APIs for current Iced version
 
-3. **Review official examples.**
-   - Check the Slint GitHub repository examples.
-   - Follow established patterns rather than inventing architecture.
+3. **Review official examples / source.**
+   - Follow established Iced patterns instead of inventing ad hoc architecture.
+   - Check version-specific examples that match the crate version used in this repo.
 
-4. **Search the crate source when needed.**
-   - Use the “source” view in docs.rs.
-   - Understand trait bounds and generated code behavior.
+4. **Search crate source when needed.**
+   - Use docs.rs source view / upstream source to confirm trait bounds and behavior.
+   - Verify whether a widget/style API is current or deprecated before coding.
 
 5. **Do not guess APIs.**
-   - Never assume a property type or callback signature.
-   - Verify macro expansion expectations.
-   - Confirm thread-safety requirements before introducing concurrency.
+   - Never assume a widget method, callback signature, or style function shape.
+   - Verify platform constraints for `muda`, `rfd`, and macOS APIs before changing threading behavior.
 
 ---
 
 ### Rule of Thumb
 
 If you are about to:
-- invent a workaround for a binding issue,
-- bypass the Slint threading model,
-- duplicate functionality provided by Slint,
-- guess how a macro behaves,
+- invent a workaround for an Iced API mismatch,
+- bypass message-driven state flow,
+- block inside `update`,
+- duplicate functionality already provided by Iced,
+- guess how a widget or subscription API behaves,
 
-→ **Stop and search the documentation first.**
+-> **Stop and check the documentation first.**
 
 Deep understanding prevents fragile UI code and architectural drift.
 
@@ -313,6 +397,7 @@ When making changes:
    - Improve naming
    - Clarify boundaries
    - Remove duplication
+4. Preserve existing architecture patterns unless there is a clear reason to refactor.
 
 ---
 
@@ -321,12 +406,12 @@ When making changes:
 - Builds successfully.
 - No formatting or clippy warnings.
 - Tests pass.
-- No UI thread blocking.
+- No UI thread blocking introduced.
 - Clear separation between:
-  - Slint UI
-  - Rust state
-  - Business logic
-  - Side effects
+  - Iced view rendering
+  - App state transitions
+  - Business/domain logic
+  - Side effects/platform integration
 
 ---
 
@@ -334,20 +419,20 @@ When making changes:
 
 ## Do
 
-- Keep Slint declarative.
-- Keep business logic in Rust.
-- Use bindings instead of manual synchronization.
-- Use background threads for heavy work.
-- Update UI from main thread only.
+- Keep `view` pure and declarative.
+- Keep side effects in `Task`-driven effect modules.
+- Use `Message` enums to represent intent/results explicitly.
+- Keep global vs per-window state boundaries clear.
+- Keep platform-specific code isolated.
 - Keep files small and cohesive.
 
 ## Don’t
 
-- Block the UI thread.
-- Put complex logic in `.slint`.
-- Create giant modules.
-- Use global mutable state.
-- Guess how Slint works instead of checking documentation.
+- Block inside `update` or `view`.
+- Put OS/dialog logic directly in widget closures.
+- Collapse `messages`, `state`, `view`, and `effects` into one file.
+- Introduce hidden global mutable state.
+- Guess how Iced APIs work instead of checking docs/examples.
 
 ---
 
