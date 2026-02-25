@@ -70,10 +70,16 @@ pub(crate) fn set_macos_app_icon_from_bytes() -> Result<(), String> {
 }
 
 fn player_window_settings() -> window::Settings {
+    let window_height = if cfg!(target_os = "macos") {
+        WINDOW_HEIGHT
+    } else {
+        WINDOW_HEIGHT + 26.0
+    };
+
     window::Settings {
-        size: iced::Size::new(WINDOW_WIDTH, WINDOW_HEIGHT),
-        min_size: Some(iced::Size::new(WINDOW_WIDTH, WINDOW_HEIGHT)),
-        max_size: Some(iced::Size::new(WINDOW_WIDTH, WINDOW_HEIGHT)),
+        size: iced::Size::new(WINDOW_WIDTH, window_height),
+        min_size: Some(iced::Size::new(WINDOW_WIDTH, window_height)),
+        max_size: Some(iced::Size::new(WINDOW_WIDTH, window_height)),
         resizable: false,
         icon: load_window_icon(),
         ..window::Settings::default()

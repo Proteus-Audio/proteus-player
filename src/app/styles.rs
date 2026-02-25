@@ -2,7 +2,11 @@ use iced::widget::{container, slider};
 use iced::{Color, Theme};
 
 pub(crate) const WINDOW_WIDTH: f32 = 350.0;
+#[cfg(target_os = "macos")]
 pub(crate) const WINDOW_HEIGHT: f32 = 110.0;
+#[cfg(not(target_os = "macos"))]
+pub(crate) const WINDOW_HEIGHT: f32 = 110.0;
+
 pub(crate) const WINDOW_BG: Color = Color::from_rgb(31.0 / 255.0, 31.0 / 255.0, 31.0 / 255.0);
 pub(crate) const ACCENT_TEXT: Color = Color::from_rgb(158.0 / 255.0, 158.0 / 255.0, 158.0 / 255.0);
 pub(crate) const ERROR_TEXT: Color = Color::from_rgb(1.0, 120.0 / 255.0, 120.0 / 255.0);
@@ -60,5 +64,28 @@ pub(crate) fn volume_slider_style(_theme: &Theme, _status: slider::Status) -> sl
 pub(crate) fn background_style(_theme: &Theme) -> container::Style {
     container::Style::default()
         .background(WINDOW_BG)
+        .color(ACCENT_TEXT)
+}
+
+pub(crate) fn _menu_surface_style(_theme: &Theme) -> container::Style {
+    container::Style::default()
+        .background(Color::from_rgba(
+            42.0 / 255.0,
+            42.0 / 255.0,
+            42.0 / 255.0,
+            0.96,
+        ))
+        .border(iced::border::rounded(6))
+        .color(ACCENT_TEXT)
+}
+
+pub(crate) fn menu_header_style(_theme: &Theme) -> container::Style {
+    container::Style::default()
+        .background(Color::from_rgba(
+            42.0 / 255.0,
+            42.0 / 255.0,
+            42.0 / 255.0,
+            0.9,
+        ))
         .color(ACCENT_TEXT)
 }

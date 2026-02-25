@@ -15,7 +15,6 @@ use iced::keyboard;
 use iced::task::Task;
 use iced::{Subscription, Theme, daemon, time, window};
 
-use crate::app::effects::request_open_dialog;
 use crate::app::helpers::handle_key_press;
 use crate::app::messages::Message;
 use crate::app::state::ProteusApp;
@@ -108,14 +107,15 @@ fn update(state: &mut ProteusApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        Message::NewWindowShortcut(window_id) | Message::OpenShortcut(window_id) => {
+        Message::NewWindowShortcut(window_id) => {
             state.set_focused_window(window_id);
-            request_open_dialog()
+            state.start_new_window_open_dialog()
         }
-        Message::FilePicked(path) => match path {
-            Some(path) => state.open_window(Some(path)),
-            None => Task::none(),
-        },
+        Message::OpenShortcut(window_id) => {
+            state.set_focused_window(window_id);
+            state.start_open_command_dialog()
+        }
+        Message::FilePicked(path) => state.handle_file_picked(path),
         Message::SeekByShortcut { window_id, offset } => {
             if let Some(window) = state.window_mut(window_id) {
                 window.playback.seek_by(offset);
@@ -133,6 +133,16 @@ fn update(state: &mut ProteusApp, message: Message) -> Task<Message> {
                 window.zoom_factor = (window.zoom_factor - 0.1).max(0.5);
             }
             Task::none()
+        }
+        Message::_ToggleWindowMenu(window_id) => {
+            state.set_focused_window(window_id);
+            state.toggle_window_menu(window_id);
+            Task::none()
+        }
+        Message::_WindowMenuAction { window_id, action } => {
+            state.set_focused_window(window_id);
+            state.close_window_menu(window_id);
+            state.handle_menu_action(action)
         }
         Message::CloseWindowShortcut(window_id) => {
             state.close_window_state(window_id);
@@ -167,7 +177,7 @@ fn app_theme(_state: &ProteusApp, _window_id: window::Id) -> Theme {
 fn initial_boot_task(state: &mut ProteusApp, initial_path: Option<PathBuf>) -> Task<Message> {
     match initial_path {
         Some(path) => state.open_window(Some(path)),
-        None if cfg!(target_os = "macos") => request_open_dialog(),
+        None if cfg!(target_os = "macos") => state.start_open_command_dialog(),
         None => state.open_window(None),
     }
 }

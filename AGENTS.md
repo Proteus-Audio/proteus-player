@@ -320,7 +320,7 @@ When adding non-trivial logic to `update`, consider extracting a pure helper tha
 
 Before considering work complete:
 
-- `cargo build`
+- `cargo check`
 - `cargo fmt`
 - `cargo clippy --all-targets --all-features`
 - `cargo test`

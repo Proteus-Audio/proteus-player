@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use iced::window;
 
+use crate::native_menu::MenuAction;
+
 #[derive(Debug, Clone)]
 pub(crate) enum Message {
     Tick,
@@ -9,18 +11,32 @@ pub(crate) enum Message {
     WindowFocused(window::Id),
     WindowCloseRequested(window::Id),
     WindowClosed(window::Id),
-    TimelineChanged { window_id: window::Id, percent: f64 },
-    VolumeChanged { window_id: window::Id, percent: f32 },
+    TimelineChanged {
+        window_id: window::Id,
+        percent: f64,
+    },
+    VolumeChanged {
+        window_id: window::Id,
+        percent: f32,
+    },
     PlayPausePressed(window::Id),
     ResetPressed(window::Id),
     ShufflePressed(window::Id),
     FilePicked(Option<PathBuf>),
     PlayPauseShortcut(window::Id),
-    SeekByShortcut { window_id: window::Id, offset: f64 },
+    SeekByShortcut {
+        window_id: window::Id,
+        offset: f64,
+    },
     NewWindowShortcut(window::Id),
     OpenShortcut(window::Id),
     CloseWindowShortcut(window::Id),
     ZoomInShortcut(window::Id),
     ZoomOutShortcut(window::Id),
+    _ToggleWindowMenu(window::Id),
+    _WindowMenuAction {
+        window_id: window::Id,
+        action: MenuAction,
+    },
     Noop,
 }
