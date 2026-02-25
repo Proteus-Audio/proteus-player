@@ -14,6 +14,12 @@ use crate::app::messages::Message;
 use crate::native_menu::{MenuAction, NativeMenu};
 use crate::playback::PlaybackController;
 
+#[derive(Debug, Clone, Copy)]
+enum FilePickTarget {
+    NewWindow,
+    OpenCommand { window_id: window::Id },
+}
+
 pub(crate) struct PlayerWindowState {
     pub(crate) playback: PlaybackController,
     pub(crate) current_time_percent: f64,
@@ -108,6 +114,14 @@ impl PlayerWindowState {
         self.volume_override_until = Some(Instant::now() + Duration::from_millis(250));
         self.playback.set_volume(percent / 100.0);
     }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        !self.playback.is_loaded()
+    }
+
+    pub(crate) fn load_path(&mut self, path: PathBuf) {
+        self.load(path);
+    }
 }
 
 pub(crate) struct ProteusApp {
@@ -119,6 +133,7 @@ pub(crate) struct ProteusApp {
     pub(crate) icons: IconSet,
     pub(crate) global_error: Option<String>,
     memory_sampler: Option<MemorySampler>,
+    pending_file_pick_target: FilePickTarget,
 }
 
 impl ProteusApp {
@@ -132,6 +147,7 @@ impl ProteusApp {
             icons: IconSet::new(),
             global_error: None,
             memory_sampler: MemorySampler::from_feat(),
+            pending_file_pick_target: FilePickTarget::NewWindow,
         }
     }
 
@@ -194,7 +210,8 @@ impl ProteusApp {
     pub(crate) fn handle_menu_action(&mut self, action: MenuAction) -> Task<Message> {
         match action {
             MenuAction::About => show_about_dialog(),
-            MenuAction::NewWindow | MenuAction::Open => request_open_dialog(),
+            MenuAction::NewWindow => self.start_new_window_open_dialog(),
+            MenuAction::Open => self.start_open_command_dialog(),
             MenuAction::ZoomIn => {
                 if let Some(window_id) = self.focused_window
                     && let Some(window) = self.windows.get_mut(&window_id)
@@ -232,6 +249,42 @@ impl ProteusApp {
 
     pub(crate) fn window_mut(&mut self, window_id: window::Id) -> Option<&mut PlayerWindowState> {
         self.windows.get_mut(&window_id)
+    }
+
+    pub(crate) fn start_new_window_open_dialog(&mut self) -> Task<Message> {
+        self.pending_file_pick_target = FilePickTarget::NewWindow;
+        request_open_dialog()
+    }
+
+    pub(crate) fn start_open_command_dialog(&mut self) -> Task<Message> {
+        self.pending_file_pick_target = self
+            .focused_window
+            .map(|window_id| FilePickTarget::OpenCommand { window_id })
+            .unwrap_or(FilePickTarget::NewWindow);
+        request_open_dialog()
+    }
+
+    pub(crate) fn handle_file_picked(&mut self, path: Option<PathBuf>) -> Task<Message> {
+        let target = self.pending_file_pick_target;
+        self.pending_file_pick_target = FilePickTarget::NewWindow;
+
+        let Some(path) = path else {
+            return Task::none();
+        };
+
+        match target {
+            FilePickTarget::NewWindow => self.open_window(Some(path)),
+            FilePickTarget::OpenCommand { window_id } => {
+                if let Some(window) = self.windows.get_mut(&window_id)
+                    && window.is_empty()
+                {
+                    window.load_path(path);
+                    Task::none()
+                } else {
+                    self.open_window(Some(path))
+                }
+            }
+        }
     }
 
     fn log_memory_event(&mut self, reason: &str) {
