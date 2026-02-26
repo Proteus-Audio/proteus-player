@@ -1,17 +1,17 @@
-# Proteus Author
+# Proteus Player
 
-Proteus (.prot) file authoring application built with **Vue3**, **Typescript**, and [**Tauri**](https://tauri.app/). This project is the continuation of the [multiplay mixer](https://github.com/howardah/multiplay_mixer) flutter application.
+Proteus (`.prot`) file playback application built with **Rust** and **Iced**. This project is the continuation of the [multiplay](https://github.com/howardah/multiplay) flutter application.
 
 ## Project Status
 
-This project is currently in the very early stages of development despite being in development for several years at this point as I have not had vast amounts of time to dedicate to it.
+This project is currently in the early stages of development. Despite being in development for several years at this point as I have not had vast amounts of time to dedicate to it.
 
 ## Related Repositories
 
-- [Proteus Player](https://github.com/Proteus-Audio/proteus-player) - Desktop application similar to the Quicktime Player for playing single .prot files
-- [Proteus CLI](https://github.com/Proteus-Audio/proteus-cli) - Rust-based CLI for reading and parsing .prot files
-- [Multiplay Mixer](https://github.com/howardah/multiplay_mixer) - Outdated flutter version of this application
-- [Multiplay Player](https://github.com/howardah/multiplay) - Outdated electron version of the Proteus Player
+- [Proteus Author](https://github.com/Proteus-Audio/proteus-author) - Desktop application for authoring `.prot` files
+- [Proteus Core](https://github.com/Proteus-Audio/proteus-core) - Rust Core Library and CLI for reading, parsing, and playing `.prot` files
+- [Multiplay Mixer](https://github.com/howardah/multiplay_mixer) - Outdated flutter version of the Proteus Author application
+- [Multiplay Player](https://github.com/howardah/multiplay) - Outdated electron version of this application
 
 ## About
 
@@ -33,9 +33,11 @@ My first proof of concept of this variable playback format ( [hosted here](https
 
 In mid-2022, I decided to replace the flutter applications with an  [ElectronJS](https://www.electronjs.org/)  application in order to make use of the flexibility of CSS styling and, at the same time, decided to name the project after the Greek sea-god  [Proteus](https://en.wikipedia.org/wiki/Proteus)  who represents mutability and is the root of the adjective ‘protean’.
 
-Shortly after beginning to write the electron application, I realised that the resulting file size and performance of the build was far from ideal for a, relatively, simple application. I did some additional research and found  [Tauri](https://tauri.app/)  which offers nearly everything that I was looking for with electron but with  _significantly_  improved performance. Tauri's perfomative Rust-based encouraged me to build out a Rust-based CLI for parsing and playing .prot files which in integrated into this project as well as the [Proteus Player](https://github.com/Proteus-Audio/proteus-player) application.
+Shortly after beginning to write the electron application, I realised that the resulting file size and performance of the build was far from ideal for a, relatively, simple application. I did some additional research and found  [Tauri](https://tauri.app/)  which offers nearly everything that I was looking for with electron but with  _significantly_  improved performance. Tauri's perfomative Rust-based backend encouraged me to build out a Rust-based core library for parsing and playing `.prot` files which is integrated into the [Proteus Author](https://github.com/Proteus-Audio/proteus-author) project as well as this [Proteus Player](https://github.com/Proteus-Audio/proteus-player) application.
 
-There's still much to do with the project so, if you would like to follow along, you can keep tabs on this repo its  [issues page](https://github.com/Proteus-Audio/proteus-author/issues). If you’d like talk about the idea, feel free to give me a shout at [adam.thomas.howard@gmail.com](mailto:adam.thomas.howard@gmail.com)!
+For this player, the WebView frontend of the Tauri application was still didn’t quite deliver the user experience I was looking for, for the player application. So, since this is mainly just a UI wrapper around the Proteus Core library, I decided to migrate the application once again to [Iced](https://iced.rs/), a Rust-based GUI application library.
+
+There's still much to do with the project so, if you would like to follow along, you can keep tabs on this repo its  [issues page](https://github.com/Proteus-Audio/proteus-player/issues). If you’d like talk about the idea, feel free to give me a shout at [adam.thomas.howard@gmail.com](mailto:adam.thomas.howard@gmail.com)!
 
 ## License
 
