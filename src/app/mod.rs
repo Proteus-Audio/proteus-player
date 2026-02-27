@@ -69,6 +69,10 @@ fn update(state: &mut ProteusApp, message: Message) -> Task<Message> {
                 tasks.push(state.handle_menu_action(action));
             }
 
+            if let Some(task) = state.maybe_startup_open_dialog_task() {
+                tasks.push(task);
+            }
+
             Task::batch(tasks)
         }
         Message::WindowOpened(window_id) | Message::WindowFocused(window_id) => {
@@ -194,7 +198,8 @@ fn initial_boot_task(state: &mut ProteusApp, initial_path: Option<PathBuf>) -> T
         None if cfg!(target_os = "macos") => {
             let opened_paths = effects::take_macos_opened_files();
             if opened_paths.is_empty() {
-                state.start_open_command_dialog()
+                state.schedule_startup_open_dialog(Duration::from_millis(350))
+                // state.open_window(None)
             } else {
                 let mut tasks = Vec::with_capacity(opened_paths.len());
                 for path in opened_paths {

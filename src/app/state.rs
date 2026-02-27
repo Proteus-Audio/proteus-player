@@ -134,6 +134,7 @@ pub(crate) struct ProteusApp {
     pub(crate) global_error: Option<String>,
     memory_sampler: Option<MemorySampler>,
     pending_file_pick_target: FilePickTarget,
+    startup_open_dialog_due_at: Option<Instant>,
 }
 
 impl ProteusApp {
@@ -148,6 +149,7 @@ impl ProteusApp {
             global_error: None,
             memory_sampler: MemorySampler::from_feat(),
             pending_file_pick_target: FilePickTarget::NewWindow,
+            startup_open_dialog_due_at: None,
         }
     }
 
@@ -288,6 +290,8 @@ impl ProteusApp {
     }
 
     pub(crate) fn handle_external_open_path(&mut self, path: PathBuf) -> Task<Message> {
+        self.startup_open_dialog_due_at = None;
+
         if let Some(window_id) = self.focused_window
             && let Some(window) = self.windows.get_mut(&window_id)
             && window.is_empty()
@@ -297,6 +301,27 @@ impl ProteusApp {
         }
 
         self.open_window(Some(path))
+    }
+
+    pub(crate) fn schedule_startup_open_dialog(&mut self, delay: Duration) -> Task<Message> {
+        self.startup_open_dialog_due_at = Some(Instant::now() + delay);
+
+        Task::none()
+    }
+
+    pub(crate) fn maybe_startup_open_dialog_task(&mut self) -> Option<Task<Message>> {
+        let due_at = self.startup_open_dialog_due_at?;
+        if Instant::now() < due_at {
+            return None;
+        }
+
+        self.startup_open_dialog_due_at = None;
+        let has_loaded_window = self.windows.values().any(|window| !window.is_empty());
+        if has_loaded_window {
+            None
+        } else {
+            Some(self.start_open_command_dialog())
+        }
     }
 
     fn log_memory_event(&mut self, reason: &str) {
