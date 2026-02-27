@@ -19,6 +19,10 @@ use crate::app::helpers::handle_key_press;
 use crate::app::messages::Message;
 use crate::app::state::ProteusApp;
 
+pub fn install_startup_integrations() {
+    let _ = effects::ensure_macos_open_file_handler();
+}
+
 pub fn run(initial_path: Option<PathBuf>) -> iced::Result {
     daemon(
         move || {
@@ -44,6 +48,16 @@ fn update(state: &mut ProteusApp, message: Message) -> Task<Message> {
             state.refresh_windows();
 
             let mut tasks = Vec::new();
+
+            if let Err(err) = effects::ensure_macos_open_file_handler() {
+                state.global_error = Some(format!("Failed to install file-open handler: {err}"));
+            }
+
+            let opened_paths = effects::take_macos_opened_files();
+            for path in opened_paths {
+                tasks.push(state.handle_external_open_path(path));
+            }
+
             let mut actions = Vec::new();
             if let Some(menu) = &state.native_menu {
                 while let Some(action) = menu.poll_action() {
@@ -177,7 +191,18 @@ fn app_theme(_state: &ProteusApp, _window_id: window::Id) -> Theme {
 fn initial_boot_task(state: &mut ProteusApp, initial_path: Option<PathBuf>) -> Task<Message> {
     match initial_path {
         Some(path) => state.open_window(Some(path)),
-        None if cfg!(target_os = "macos") => state.start_open_command_dialog(),
+        None if cfg!(target_os = "macos") => {
+            let opened_paths = effects::take_macos_opened_files();
+            if opened_paths.is_empty() {
+                state.start_open_command_dialog()
+            } else {
+                let mut tasks = Vec::with_capacity(opened_paths.len());
+                for path in opened_paths {
+                    tasks.push(state.handle_external_open_path(path));
+                }
+                Task::batch(tasks)
+            }
+        }
         None => state.open_window(None),
     }
 }

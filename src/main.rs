@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 fn main() -> iced::Result {
     set_app_menu_name();
+    app::install_startup_integrations();
     app::run(parse_initial_path())
 }
 

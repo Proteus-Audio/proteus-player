@@ -287,6 +287,18 @@ impl ProteusApp {
         }
     }
 
+    pub(crate) fn handle_external_open_path(&mut self, path: PathBuf) -> Task<Message> {
+        if let Some(window_id) = self.focused_window
+            && let Some(window) = self.windows.get_mut(&window_id)
+            && window.is_empty()
+        {
+            window.load_path(path);
+            return Task::none();
+        }
+
+        self.open_window(Some(path))
+    }
+
     fn log_memory_event(&mut self, reason: &str) {
         let windows = self.windows.len();
         let loaded_players = self
