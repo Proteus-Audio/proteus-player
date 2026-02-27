@@ -5,7 +5,7 @@ use crate::app::helpers::format_time;
 use crate::app::messages::Message;
 use crate::app::state::{PlayerWindowState, ProteusApp};
 use crate::app::styles::{
-    ACCENT_TEXT, ERROR_TEXT, background_style, menu_header_style, _menu_surface_style,
+    _menu_surface_style, ACCENT_TEXT, ERROR_TEXT, background_style, menu_header_style,
     timeline_slider_style, volume_slider_style,
 };
 use crate::native_menu::MenuAction;
@@ -118,10 +118,7 @@ fn window_view<'a>(
     .width(Length::Fill)
     .height(Length::Fill);
 
-    let mut content = column![
-        main_content,
-        platform_footer(),
-    ];
+    let mut content = column![main_content, platform_footer(),];
 
     if let Some(error) = &window.last_error {
         content = content.push(text(error.clone()).size(11).color(ERROR_TEXT));
@@ -135,7 +132,6 @@ fn window_view<'a>(
         .style(background_style)
         .into()
 }
-
 
 fn platform_footer<'a>() -> Element<'a, Message> {
     if cfg!(target_os = "macos") {

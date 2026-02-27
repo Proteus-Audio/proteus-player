@@ -1,6 +1,6 @@
 [package]
 name = "proteus-player"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2024"
 description = "Proteus Player desktop audio player"
 license = "PolyForm Small Business License"
@@ -33,6 +33,9 @@ publisher = "Proteus"
 category = "Music"
 homepage = "https://github.com/innocentsmith/proteus-player"
 copyright = "© Adam Thomas Howard 2026"
+file-associations = [
+  { extensions = ["prot"], mime-type = "application/x-proteus-audio", description = "Proteus Audio File", name = "Proteus Audio" },
+]
 icons = [
   "assets/app-icon/icon.icns",
   "assets/app-icon/icon.ico",

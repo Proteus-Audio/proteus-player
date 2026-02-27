@@ -38,6 +38,10 @@ fn parse_initial_path() -> Option<PathBuf> {
         {
             return Some(PathBuf::from(path));
         }
+
+        if !arg.to_string_lossy().starts_with('-') {
+            return Some(PathBuf::from(arg));
+        }
     }
 
     None
