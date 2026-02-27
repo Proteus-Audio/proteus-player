@@ -35,6 +35,11 @@ homepage = "https://github.com/innocentsmith/proteus-player"
 copyright = "© Adam Thomas Howard 2026"
 file-associations = [
   { extensions = ["prot"], mime-type = "application/x-proteus-audio", description = "Proteus Audio File", name = "Proteus Audio" },
+  { extensions = ["mka"], mime-type = "audio/x-matroska", description = "Matroska Audio File", name = "Matroska Audio" },
+  { extensions = ["mp3"], mime-type = "audio/mpeg", description = "MP3 Audio File", name = "MP3 Audio" },
+  { extensions = ["wav"], mime-type = "audio/wav", description = "WAV Audio File", name = "WAV Audio" },
+  { extensions = ["ogg"], mime-type = "audio/ogg", description = "Ogg Audio File", name = "Ogg Audio" },
+  { extensions = ["aiff", "aif"], mime-type = "audio/aiff", description = "AIFF Audio File", name = "AIFF Audio" },
 ]
 icons = [
   "assets/app-icon/icon.icns",

@@ -9,7 +9,12 @@ pub(crate) fn request_open_dialog() -> Task<Message> {
     #[cfg(target_os = "macos")]
     {
         let path = rfd::FileDialog::new()
-            .add_filter("Prot File", &["prot"])
+            .add_filter(
+                "Supported Audio",
+                &["prot", "mka", "wav", "mp3", "ogg", "aiff", "aif"],
+            )
+            .add_filter("Proteus Audio", &["prot", "mka"])
+            .add_filter("Common Audio", &["wav", "mp3", "ogg", "aiff", "aif"])
             .pick_file();
         Task::done(Message::FilePicked(path))
     }
@@ -18,7 +23,12 @@ pub(crate) fn request_open_dialog() -> Task<Message> {
     Task::perform(
         async move {
             rfd::FileDialog::new()
-                .add_filter("Prot File", &["prot"])
+                .add_filter(
+                    "Supported Audio",
+                    &["prot", "mka", "wav", "mp3", "ogg", "aiff", "aif"],
+                )
+                .add_filter("Proteus Audio", &["prot", "mka"])
+                .add_filter("Common Audio", &["wav", "mp3", "ogg", "aiff", "aif"])
                 .pick_file()
         },
         Message::FilePicked,

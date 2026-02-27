@@ -39,7 +39,18 @@ impl PlaybackController {
                 .ok_or_else(|| anyhow!("path contains invalid UTF-8"))?
                 .to_owned();
 
-            self.player = Some(Player::new(&path_string));
+            let extension = path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .map(str::to_ascii_lowercase);
+            let player = match extension.as_deref() {
+                Some("prot") | Some("mka") => Player::new(&path_string),
+                _ => Player::new_from_file_paths_legacy(vec![vec![path_string.clone()]]),
+            };
+
+            player.set_max_sink_chunks(30);
+
+            self.player = Some(player);
             self.current_path = Some(path.to_path_buf());
             Ok(())
         }
