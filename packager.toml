@@ -1,6 +1,6 @@
 name = "proteus-player"
 product-name = "Proteus Player"
-version = "0.4.1"
+version = "0.5.0"
 authors = ["Adam Thomas Howard <adam.thomas.howard@gmail.com>"]
 identifier = "com.proteus.player"
 publisher = "Proteus"
@@ -33,6 +33,10 @@ resources = [
   "assets/icons/*",
   "assets/app-icon/*",
 ]
+
+[[binaries]]
+path = "proteus-player"
+main = true
 
 [deb]
 section = "sound"
