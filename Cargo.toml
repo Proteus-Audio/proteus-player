@@ -1,10 +1,12 @@
 [package]
 name = "proteus-player"
-version = "0.4.1"
+version = "0.5.0"
 edition = "2024"
+authors = ["Adam Howard <adam.thomas.howard@gmail.com>"]
 description = "Proteus Player desktop audio player"
-license = "PolyForm Small Business License"
+homepage = "https://github.com/innocentsmith/proteus-player"
 repository = "https://github.com/innocentsmith/proteus-player"
+license-file = "LICENSE"
 
 [features]
 default = ["with-player"]
@@ -16,7 +18,7 @@ debug = ["dep:sysinfo"]
 anyhow = "1.0.100"
 iced = { version = "0.14.0", features = ["image", "svg", "tokio"] }
 muda = "0.16.0"
-proteus-lib = { version = "0.7.0-alpha.3", optional = true }
+proteus-lib = { version = "0.7.0-alpha.4", optional = true }
 # proteus-lib = { path = "../../rust/proteus/proteus-lib", version = "0.6.1", optional = true }
 rfd = "0.17.2"
 sysinfo = { version = "0.37.2", optional = true }
@@ -25,38 +27,6 @@ sysinfo = { version = "0.37.2", optional = true }
 objc2 = "0.6.3"
 objc2-app-kit = { version = "0.3.2", features = ["NSApplication", "NSImage", "NSResponder"] }
 objc2-foundation = { version = "0.3.2", features = ["NSData", "NSProcessInfo", "NSString"] }
-
-[package.metadata.packager]
-product-name = "Proteus Player"
-identifier = "com.proteus.player"
-publisher = "Proteus"
-category = "Music"
-homepage = "https://github.com/innocentsmith/proteus-player"
-copyright = "© Adam Thomas Howard 2026"
-file-associations = [
-  { extensions = ["prot"], mime-type = "application/x-proteus-audio", description = "Proteus Audio File", name = "Proteus Audio" },
-  { extensions = ["mka"], mime-type = "audio/x-matroska", description = "Matroska Audio File", name = "Matroska Audio" },
-  { extensions = ["mp3"], mime-type = "audio/mpeg", description = "MP3 Audio File", name = "MP3 Audio" },
-  { extensions = ["wav"], mime-type = "audio/wav", description = "WAV Audio File", name = "WAV Audio" },
-  { extensions = ["ogg"], mime-type = "audio/ogg", description = "Ogg Audio File", name = "Ogg Audio" },
-  { extensions = ["aiff", "aif"], mime-type = "audio/aiff", description = "AIFF Audio File", name = "AIFF Audio" },
-]
-icons = [
-  "assets/app-icon/icon.icns",
-  "assets/app-icon/icon.ico",
-  "assets/app-icon/icon.png",
-  "assets/app-icon-32.png",
-]
-resources = [
-  "assets/app-icon-32.png",
-  "assets/icons/*",
-  "assets/app-icon/*",
-]
-before-packaging-command = "cargo build --release"
-out-dir = "target/release"
-
-[package.metadata.packager.macos]
-minimum-system-version = "11.0"
 
 [profile.release]
 lto = "thin"

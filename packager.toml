@@ -1,0 +1,42 @@
+name = "proteus-player"
+product-name = "Proteus Player"
+version = "0.4.1"
+authors = ["Adam Thomas Howard <adam.thomas.howard@gmail.com>"]
+identifier = "com.proteus.player"
+publisher = "Proteus"
+category = "Music"
+description = "Proteus Player desktop audio player"
+homepage = "https://github.com/innocentsmith/proteus-player"
+license-file = "LICENSE"
+copyright = "© Adam Thomas Howard 2026"
+before-packaging-command = "cargo build --release"
+out-dir = "target/release"
+
+file-associations = [
+  { extensions = ["prot"], mime-type = "application/x-proteus-audio", description = "Proteus Audio File", name = "Proteus Audio" },
+  { extensions = ["mka"], mime-type = "audio/x-matroska", description = "Matroska Audio File", name = "Matroska Audio" },
+  { extensions = ["mp3"], mime-type = "audio/mpeg", description = "MP3 Audio File", name = "MP3 Audio" },
+  { extensions = ["wav"], mime-type = "audio/wav", description = "WAV Audio File", name = "WAV Audio" },
+  { extensions = ["ogg"], mime-type = "audio/ogg", description = "Ogg Audio File", name = "Ogg Audio" },
+  { extensions = ["aiff", "aif"], mime-type = "audio/aiff", description = "AIFF Audio File", name = "AIFF Audio" },
+]
+
+icons = [
+  "assets/app-icon/icon.icns",
+  "assets/app-icon/icon.ico",
+  "assets/app-icon/icon.png",
+  "assets/app-icon-32.png",
+]
+
+resources = [
+  "assets/app-icon-32.png",
+  "assets/icons/*",
+  "assets/app-icon/*",
+]
+
+[deb]
+section = "sound"
+priority = "optional"
+
+[macos]
+minimum-system-version = "11.0"

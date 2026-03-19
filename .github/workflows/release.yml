@@ -117,15 +117,15 @@ jobs:
 
       - name: Disable before-packaging hook in CI (macOS/Linux)
         if: matrix.kind != 'windows'
-        run: sed -i.bak '/^before-packaging-command = "cargo build --release"$/d' Cargo.toml
+        run: sed -i.bak '/^before-packaging-command = "cargo build --release"$/d' packager.toml
 
       - name: Disable before-packaging hook in CI (Windows)
         if: matrix.kind == 'windows'
         shell: pwsh
         run: |
-          $content = Get-Content Cargo.toml -Raw
+          $content = Get-Content packager.toml -Raw
           $updated = $content -replace '(?m)^before-packaging-command = "cargo build --release"\r?\n', ''
-          Set-Content Cargo.toml -Value $updated -NoNewline
+          Set-Content packager.toml -Value $updated -NoNewline
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -185,8 +185,18 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
           FORMATS: ${{ matrix.formats }}
+          VERSION: ${{ needs.prepare-release.outputs.version }}
         shell: pwsh
-        run: cargo packager --release --target $env:TARGET --binaries-dir "target/$env:TARGET/release" --formats $env:FORMATS
+        run: |
+          $formats = $env:FORMATS
+
+          # WiX/MSI requires a numeric-only Windows Installer version. For prereleases,
+          # keep the semver label intact and ship only the NSIS installer.
+          if ($env:TARGET -eq "x86_64-pc-windows-msvc" -and $env:VERSION -match "-") {
+            $formats = "nsis"
+          }
+
+          cargo packager --release --target $env:TARGET --binaries-dir "target/$env:TARGET/release" --formats $formats
 
       - name: Collect package artifacts (macOS/Linux)
         if: matrix.kind != 'windows'
