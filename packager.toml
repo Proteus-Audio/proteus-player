@@ -9,7 +9,7 @@ description = "Proteus Player desktop audio player"
 homepage = "https://github.com/innocentsmith/proteus-player"
 license-file = "LICENSE"
 copyright = "© Adam Thomas Howard 2026"
-before-packaging-command = "cargo build --release"
+before-packaging-command = "cargo build --release --target-dir target"
 out-dir = "target/release"
 
 file-associations = [
