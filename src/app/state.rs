@@ -12,7 +12,7 @@ use crate::app::icons::IconSet;
 use crate::app::memory::MemorySampler;
 use crate::app::messages::Message;
 use crate::native_menu::{MenuAction, NativeMenu};
-use crate::playback::PlaybackController;
+use crate::playback::{PlaybackController, PlaybackLoadError};
 
 #[derive(Debug, Clone, Copy)]
 enum FilePickTarget {
@@ -66,6 +66,9 @@ impl PlayerWindowState {
                 if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
                     self.window_title = name.to_owned();
                 }
+            }
+            Err(err @ PlaybackLoadError::UnsupportedFormat { .. }) => {
+                self.last_error = Some(err.to_string());
             }
             Err(err) => self.last_error = Some(format!("Failed to load file: {err}")),
         }

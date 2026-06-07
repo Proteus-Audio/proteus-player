@@ -1,8 +1,36 @@
+use std::fmt;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Result, anyhow};
+use anyhow::{Error, anyhow};
 #[cfg(feature = "with-player")]
 use proteus_lib::playback::player::Player;
+#[cfg(feature = "with-player")]
+use proteus_lib::tools::decode::check_audio_file_supported;
+
+#[derive(Debug)]
+pub enum PlaybackLoadError {
+    UnsupportedFormat { file_name: String },
+    Other(Error),
+}
+
+impl PlaybackLoadError {
+    fn other(error: impl Into<Error>) -> Self {
+        Self::Other(error.into())
+    }
+}
+
+impl fmt::Display for PlaybackLoadError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnsupportedFormat { file_name } => {
+                write!(f, "{file_name} is in an unsupported format")
+            }
+            Self::Other(error) => error.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for PlaybackLoadError {}
 
 #[derive(Debug, Clone, Copy)]
 pub struct PlaybackStatus {
@@ -28,7 +56,9 @@ impl PlaybackController {
         }
     }
 
-    pub fn load(&mut self, path: &Path) -> Result<()> {
+    pub fn load(&mut self, path: &Path) -> Result<(), PlaybackLoadError> {
+        preflight_supported_format(path)?;
+
         // Drop any existing player before replacing it.
         self.shutdown();
 
@@ -36,7 +66,7 @@ impl PlaybackController {
         {
             let path_string = path
                 .to_str()
-                .ok_or_else(|| anyhow!("path contains invalid UTF-8"))?
+                .ok_or_else(|| PlaybackLoadError::other(anyhow!("path contains invalid UTF-8")))?
                 .to_owned();
 
             let extension = path
@@ -59,7 +89,7 @@ impl PlaybackController {
         {
             let _ = path
                 .to_str()
-                .ok_or_else(|| anyhow!("path contains invalid UTF-8"))?;
+                .ok_or_else(|| PlaybackLoadError::other(anyhow!("path contains invalid UTF-8")))?;
             self.player = None;
             self.current_path = Some(path.to_path_buf());
             Ok(())
@@ -180,6 +210,36 @@ impl PlaybackController {
     pub fn is_loaded(&self) -> bool {
         self.player.is_some()
     }
+}
+
+fn preflight_supported_format(path: &Path) -> Result<(), PlaybackLoadError> {
+    #[cfg(not(feature = "with-player"))]
+    {
+        let _ = path;
+        return Ok(());
+    }
+
+    #[cfg(feature = "with-player")]
+    {
+        let path_string = path
+            .to_str()
+            .ok_or_else(|| PlaybackLoadError::other(anyhow!("path contains invalid UTF-8")))?;
+
+        if check_audio_file_supported(path_string).supported {
+            Ok(())
+        } else {
+            Err(PlaybackLoadError::UnsupportedFormat {
+                file_name: display_file_name(path),
+            })
+        }
+    }
+}
+
+fn display_file_name(path: &Path) -> String {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map(str::to_owned)
+        .unwrap_or_else(|| path.display().to_string())
 }
 
 impl Drop for PlaybackController {
