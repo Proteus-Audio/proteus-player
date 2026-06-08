@@ -6,6 +6,7 @@ mod messages;
 mod state;
 mod styles;
 mod view;
+mod widgets;
 
 use std::path::PathBuf;
 use std::time::Duration;

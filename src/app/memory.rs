@@ -1,5 +1,5 @@
 #[cfg(feature = "debug")]
-pub mod memory {
+mod enabled {
     use std::process::Command;
     use std::time::{Duration, Instant};
 
@@ -15,27 +15,6 @@ pub mod memory {
 
     impl MemorySampler {
         pub(crate) fn from_feat() -> Option<Self> {
-            Some(Self {
-                system: System::new(),
-                pid: Pid::from_u32(std::process::id()),
-                next_periodic_log: Instant::now(),
-                peak_rss: 0,
-                peak_virtual: 0,
-            })
-        }
-
-        pub(crate) fn from_env() -> Option<Self> {
-            let enabled = std::env::var("PROTEUS_MEM_TRACE")
-                .map(|value| {
-                    let normalized = value.to_ascii_lowercase();
-                    matches!(normalized.as_str(), "1" | "true" | "yes" | "on")
-                })
-                .unwrap_or(false);
-
-            if !enabled {
-                return None;
-            }
-
             Some(Self {
                 system: System::new(),
                 pid: Pid::from_u32(std::process::id()),
@@ -130,7 +109,7 @@ pub mod memory {
 }
 
 #[cfg(not(feature = "debug"))]
-mod memory {
+mod disabled {
     pub(crate) struct MemorySampler;
 
     impl MemorySampler {
@@ -145,4 +124,8 @@ mod memory {
     }
 }
 
-pub(crate) use memory::MemorySampler;
+#[cfg(not(feature = "debug"))]
+pub(crate) use disabled::MemorySampler;
+
+#[cfg(feature = "debug")]
+pub(crate) use enabled::MemorySampler;

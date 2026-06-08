@@ -1,6 +1,6 @@
 [package]
 name = "proteus-player"
-version = "0.5.2"
+version = "0.5.3"
 edition = "2024"
 authors = ["Adam Howard <adam.thomas.howard@gmail.com>"]
 description = "Proteus Player desktop audio player"
@@ -16,7 +16,7 @@ debug = ["dep:sysinfo"]
 
 [dependencies]
 anyhow = "1.0.100"
-iced = { version = "0.14.0", features = ["image", "svg", "tokio"] }
+iced = { version = "0.14.0", features = ["advanced", "image", "svg", "tokio"] }
 muda = "0.16.0"
 proteus-lib = { version = "0.7.0-alpha.7", optional = true }
 # proteus-lib = { path = "../../rust/proteus/proteus-lib", version = "0.6.1", optional = true }

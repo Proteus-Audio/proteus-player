@@ -8,6 +8,7 @@ use crate::app::styles::{
     _menu_surface_style, ACCENT_TEXT, ERROR_TEXT, background_style, menu_header_style,
     timeline_slider_style, volume_slider_style,
 };
+use crate::app::widgets::slider_with_handle_cursor;
 use crate::native_menu::MenuAction;
 
 pub(crate) fn view(state: &ProteusApp, window_id: window::Id) -> Element<'_, Message> {
@@ -37,12 +38,17 @@ fn window_view<'a>(
             .size(12)
             .width(Length::Fixed(30.0))
             .color(ACCENT_TEXT),
-        slider(0.0..=100.0, window.current_time_percent, move |percent| {
-            Message::TimelineChanged { window_id, percent }
-        })
-        .step(0.1)
-        .width(Length::Fixed(TIMELINE_SLIDER_WIDTH))
-        .style(timeline_slider_style),
+        slider_with_handle_cursor(
+            slider(0.0..=100.0, window.current_time_percent, move |percent| {
+                Message::TimelineChanged { window_id, percent }
+            })
+            .step(0.1)
+            .width(Length::Fixed(TIMELINE_SLIDER_WIDTH))
+            .style(timeline_slider_style),
+            window.current_time_percent,
+            0.0..=100.0,
+            5.0,
+        ),
         text(format_time(window.duration.unwrap_or(0.0)))
             .size(12)
             .width(Length::Fixed(30.0))
@@ -92,12 +98,17 @@ fn window_view<'a>(
         svg(state.icons.volume_icon(window.volume_percent))
             .width(16)
             .height(16),
-        slider(0.0..=100.0, window.volume_percent, move |percent| {
-            Message::VolumeChanged { window_id, percent }
-        })
-        .step(1.0)
-        .width(Length::Fixed(ROW_WIDTH - 22.0))
-        .style(volume_slider_style),
+        slider_with_handle_cursor(
+            slider(0.0..=100.0, window.volume_percent, move |percent| {
+                Message::VolumeChanged { window_id, percent }
+            })
+            .step(1.0)
+            .width(Length::Fixed(ROW_WIDTH - 22.0))
+            .style(volume_slider_style),
+            f64::from(window.volume_percent),
+            0.0..=100.0,
+            5.0,
+        ),
     ]
     .align_y(Alignment::Center)
     .spacing(6)
