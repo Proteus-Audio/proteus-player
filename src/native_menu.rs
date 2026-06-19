@@ -1,14 +1,16 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use anyhow::{Result, anyhow};
 use muda::accelerator::Accelerator;
 use muda::{Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem, Submenu};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum MenuAction {
     About,
     NewWindow,
     Open,
+    OpenRecent(PathBuf),
     ZoomIn,
     ZoomOut,
 }
@@ -16,6 +18,8 @@ pub enum MenuAction {
 pub struct NativeMenu {
     _menu: Menu,
     actions: HashMap<MenuId, MenuAction>,
+    recent_menu: Submenu,
+    recent_item_ids: Vec<MenuId>,
 }
 
 impl NativeMenu {
@@ -52,6 +56,8 @@ impl NativeMenu {
         )
         .map_err(|e| anyhow!(e.to_string()))?;
 
+        let recent_menu = Submenu::new("Open Recent", false);
+
         let file_menu = Submenu::with_items(
             "File",
             true,
@@ -69,6 +75,7 @@ impl NativeMenu {
                     true,
                     parse_accelerator("CmdOrCtrl+O"),
                 ),
+                &recent_menu,
                 &PredefinedMenuItem::separator(),
             ],
         )
@@ -134,12 +141,41 @@ impl NativeMenu {
         Ok(Self {
             _menu: menu,
             actions,
+            recent_menu,
+            recent_item_ids: Vec::new(),
         })
+    }
+
+    pub fn set_recent_files(&mut self, files: &[PathBuf]) -> Result<()> {
+        for id in self.recent_item_ids.drain(..) {
+            self.actions.remove(&id);
+        }
+        while self.recent_menu.remove_at(0).is_some() {}
+
+        for (index, path) in files.iter().filter(|path| path.is_file()).enumerate() {
+            let id = MenuId::new(format!("open_recent_{index}"));
+            let label = path
+                .file_name()
+                .unwrap_or(path.as_os_str())
+                .to_string_lossy();
+            let item = MenuItem::with_id(id.clone(), label, true, None::<Accelerator>);
+
+            self.recent_menu
+                .append(&item)
+                .map_err(|e| anyhow!(e.to_string()))?;
+            self.actions
+                .insert(id.clone(), MenuAction::OpenRecent(path.clone()));
+            self.recent_item_ids.push(id);
+        }
+
+        self.recent_menu
+            .set_enabled(!self.recent_item_ids.is_empty());
+        Ok(())
     }
 
     pub fn poll_action(&self) -> Option<MenuAction> {
         let event = MenuEvent::receiver().try_recv().ok()?;
-        self.actions.get(event.id()).copied()
+        self.actions.get(event.id()).cloned()
     }
 }
 

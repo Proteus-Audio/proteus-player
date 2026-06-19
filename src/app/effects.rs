@@ -3,6 +3,7 @@ use iced::window;
 use std::path::PathBuf;
 
 use crate::app::messages::Message;
+use crate::app::recent_files_store;
 use crate::app::styles::{WINDOW_HEIGHT, WINDOW_WIDTH};
 
 pub(crate) fn request_open_dialog() -> Task<Message> {
@@ -32,6 +33,27 @@ pub(crate) fn request_open_dialog() -> Task<Message> {
                 .pick_file()
         },
         Message::FilePicked,
+    )
+}
+
+pub(crate) fn filter_existing_files(paths: Vec<PathBuf>) -> Task<Vec<PathBuf>> {
+    Task::perform(
+        async move { paths.into_iter().filter(|path| path.is_file()).collect() },
+        std::convert::identity,
+    )
+}
+
+pub(crate) fn load_recent_files() -> Task<Message> {
+    Task::perform(
+        async move { recent_files_store::load() },
+        Message::RecentFilesLoaded,
+    )
+}
+
+pub(crate) fn persist_recent_files(generation: u64, files: Vec<PathBuf>) -> Task<Message> {
+    Task::perform(
+        async move { recent_files_store::save(&files) },
+        move |result| Message::RecentFilesPersisted { generation, result },
     )
 }
 

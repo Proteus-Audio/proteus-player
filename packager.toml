@@ -1,6 +1,6 @@
 name = "proteus-player"
 product-name = "Proteus Player"
-version = "0.5.3"
+version = "0.5.4"
 authors = ["Adam Thomas Howard <adam.thomas.howard@gmail.com>"]
 identifier = "com.proteus.player"
 publisher = "Proteus"

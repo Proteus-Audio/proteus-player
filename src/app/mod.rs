@@ -3,6 +3,7 @@ mod helpers;
 mod icons;
 mod memory;
 mod messages;
+mod recent_files_store;
 mod state;
 mod styles;
 mod view;
@@ -52,6 +53,17 @@ fn update(state: &mut ProteusApp, message: Message) -> Task<Message> {
 
             for (window_id, title) in state.take_pending_title_tooltips() {
                 tasks.push(effects::set_window_title_tooltip(window_id, title));
+            }
+
+            if let Some((generation, files)) = state.take_recent_files_to_validate() {
+                tasks.push(
+                    effects::filter_existing_files(files)
+                        .map(move |files| Message::RecentFilesValidated { generation, files }),
+                );
+            }
+
+            if let Some((generation, files)) = state.take_recent_files_to_persist() {
+                tasks.push(effects::persist_recent_files(generation, files));
             }
 
             if let Err(err) = effects::ensure_macos_open_file_handler() {
@@ -139,6 +151,18 @@ fn update(state: &mut ProteusApp, message: Message) -> Task<Message> {
             state.start_open_command_dialog()
         }
         Message::FilePicked(path) => state.handle_file_picked(path),
+        Message::RecentFilesLoaded(result) => {
+            state.load_recent_files(result);
+            Task::none()
+        }
+        Message::RecentFilesValidated { generation, files } => {
+            state.update_recent_files(generation, files);
+            Task::none()
+        }
+        Message::RecentFilesPersisted { generation, result } => {
+            state.recent_files_persisted(generation, result);
+            Task::none()
+        }
         Message::SeekByShortcut { window_id, offset } => {
             if let Some(window) = state.window_mut(window_id) {
                 window.playback.seek_by(offset);
@@ -198,7 +222,7 @@ fn app_theme(_state: &ProteusApp, _window_id: window::Id) -> Theme {
 }
 
 fn initial_boot_task(state: &mut ProteusApp, initial_path: Option<PathBuf>) -> Task<Message> {
-    match initial_path {
+    let startup_task = match initial_path {
         Some(path) => state.open_window(Some(path)),
         None if cfg!(target_os = "macos") => {
             let opened_paths = effects::take_macos_opened_files();
@@ -214,7 +238,9 @@ fn initial_boot_task(state: &mut ProteusApp, initial_path: Option<PathBuf>) -> T
             }
         }
         None => state.open_window(None),
-    }
+    };
+
+    Task::batch([effects::load_recent_files(), startup_task])
 }
 
 fn should_exit_on_last_window_close() -> bool {

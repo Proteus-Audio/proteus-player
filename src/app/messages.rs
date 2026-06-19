@@ -23,6 +23,15 @@ pub(crate) enum Message {
     ResetPressed(window::Id),
     ShufflePressed(window::Id),
     FilePicked(Option<PathBuf>),
+    RecentFilesLoaded(Result<Vec<PathBuf>, String>),
+    RecentFilesValidated {
+        generation: u64,
+        files: Vec<PathBuf>,
+    },
+    RecentFilesPersisted {
+        generation: u64,
+        result: Result<(), String>,
+    },
     PlayPauseShortcut(window::Id),
     SeekByShortcut {
         window_id: window::Id,

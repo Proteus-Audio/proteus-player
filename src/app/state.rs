@@ -55,13 +55,13 @@ impl PlayerWindowState {
         };
 
         if let Some(path) = path {
-            window.load(path);
+            let _ = window.load(path);
         }
 
         window
     }
 
-    fn load(&mut self, path: PathBuf) {
+    fn load(&mut self, path: PathBuf) -> bool {
         match self.playback.load(&path) {
             Ok(()) => {
                 self.last_error = None;
@@ -69,11 +69,16 @@ impl PlayerWindowState {
                     self.window_title = name.to_owned();
                     self.pending_title_tooltip = Some(name.to_owned());
                 }
+                true
             }
             Err(err @ PlaybackLoadError::UnsupportedFormat { .. }) => {
                 self.last_error = Some(err.to_string());
+                false
             }
-            Err(err) => self.last_error = Some(format!("Failed to load file: {err}")),
+            Err(err) => {
+                self.last_error = Some(format!("Failed to load file: {err}"));
+                false
+            }
         }
     }
 
@@ -125,8 +130,8 @@ impl PlayerWindowState {
         !self.playback.is_loaded()
     }
 
-    pub(crate) fn load_path(&mut self, path: PathBuf) {
-        self.load(path);
+    pub(crate) fn load_path(&mut self, path: PathBuf) -> bool {
+        self.load(path)
     }
 }
 
@@ -141,6 +146,11 @@ pub(crate) struct ProteusApp {
     memory_sampler: Option<MemorySampler>,
     pending_file_pick_target: FilePickTarget,
     startup_open_dialog_due_at: Option<Instant>,
+    recent_files: Vec<PathBuf>,
+    recent_files_generation: u64,
+    recent_files_validation_requested: bool,
+    recent_files_persist_requested: bool,
+    recent_files_persist_in_flight: bool,
 }
 
 impl ProteusApp {
@@ -156,12 +166,24 @@ impl ProteusApp {
             memory_sampler: MemorySampler::from_feat(),
             pending_file_pick_target: FilePickTarget::NewWindow,
             startup_open_dialog_due_at: None,
+            recent_files: Vec::new(),
+            recent_files_generation: 0,
+            recent_files_validation_requested: false,
+            recent_files_persist_requested: false,
+            recent_files_persist_in_flight: false,
         }
     }
 
     pub(crate) fn open_window(&mut self, path: Option<PathBuf>) -> Task<Message> {
         let (window_id, task) = open_player_window();
+        let recent_path = path.clone();
         let window_state = PlayerWindowState::new(path);
+
+        if window_state.playback.is_loaded()
+            && let Some(path) = recent_path
+        {
+            self.record_recent_file(path);
+        }
 
         self.windows.insert(window_id, window_state);
         self.focused_window = Some(window_id);
@@ -227,11 +249,87 @@ impl ProteusApp {
             .collect()
     }
 
+    pub(crate) fn take_recent_files_to_validate(&mut self) -> Option<(u64, Vec<PathBuf>)> {
+        if !self.recent_files_validation_requested {
+            return None;
+        }
+
+        self.recent_files_validation_requested = false;
+        Some((self.recent_files_generation, self.recent_files.clone()))
+    }
+
+    pub(crate) fn update_recent_files(&mut self, generation: u64, files: Vec<PathBuf>) {
+        if generation != self.recent_files_generation {
+            return;
+        }
+
+        self.recent_files = files;
+        self.recent_files_persist_requested = true;
+        if let Some(menu) = &mut self.native_menu
+            && let Err(err) = menu.set_recent_files(&self.recent_files)
+        {
+            self.global_error = Some(format!("Failed to update recent-files menu: {err}"));
+        }
+    }
+
+    pub(crate) fn load_recent_files(&mut self, result: Result<Vec<PathBuf>, String>) {
+        let files = match result {
+            Ok(files) => files,
+            Err(error) => {
+                self.global_error = Some(format!("Failed to load recent files: {error}"));
+                return;
+            }
+        };
+
+        let current_files = std::mem::take(&mut self.recent_files);
+
+        for path in files
+            .into_iter()
+            .rev()
+            .chain(current_files.into_iter().rev())
+        {
+            self.record_recent_file(path);
+        }
+    }
+
+    pub(crate) fn take_recent_files_to_persist(&mut self) -> Option<(u64, Vec<PathBuf>)> {
+        if !self.recent_files_persist_requested || self.recent_files_persist_in_flight {
+            return None;
+        }
+
+        self.recent_files_persist_requested = false;
+        self.recent_files_persist_in_flight = true;
+        Some((self.recent_files_generation, self.recent_files.clone()))
+    }
+
+    pub(crate) fn recent_files_persisted(&mut self, generation: u64, result: Result<(), String>) {
+        self.recent_files_persist_in_flight = false;
+
+        if let Err(error) = result {
+            self.global_error = Some(format!("Failed to save recent files: {error}"));
+        }
+
+        if generation != self.recent_files_generation {
+            self.recent_files_persist_requested = true;
+        }
+    }
+
+    fn record_recent_file(&mut self, path: PathBuf) {
+        const MAX_RECENT_FILES: usize = 10;
+
+        self.recent_files.retain(|recent| recent != &path);
+        self.recent_files.insert(0, path);
+        self.recent_files.truncate(MAX_RECENT_FILES);
+        self.recent_files_generation = self.recent_files_generation.wrapping_add(1);
+        self.recent_files_validation_requested = true;
+    }
+
     pub(crate) fn handle_menu_action(&mut self, action: MenuAction) -> Task<Message> {
         match action {
             MenuAction::About => show_about_dialog(),
             MenuAction::NewWindow => self.start_new_window_open_dialog(),
             MenuAction::Open => self.start_open_command_dialog(),
+            MenuAction::OpenRecent(path) => self.handle_external_open_path(path),
             MenuAction::ZoomIn => {
                 if let Some(window_id) = self.focused_window
                     && let Some(window) = self.windows.get_mut(&window_id)
@@ -298,7 +396,9 @@ impl ProteusApp {
                 if let Some(window) = self.windows.get_mut(&window_id)
                     && window.is_empty()
                 {
-                    window.load_path(path);
+                    if window.load_path(path.clone()) {
+                        self.record_recent_file(path);
+                    }
                     Task::none()
                 } else {
                     self.open_window(Some(path))
@@ -314,7 +414,9 @@ impl ProteusApp {
             && let Some(window) = self.windows.get_mut(&window_id)
             && window.is_empty()
         {
-            window.load_path(path);
+            if window.load_path(path.clone()) {
+                self.record_recent_file(path);
+            }
             return Task::none();
         }
 
