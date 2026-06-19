@@ -6,34 +6,104 @@ use crate::app::messages::Message;
 use crate::app::recent_files_store;
 use crate::app::styles::{WINDOW_HEIGHT, WINDOW_WIDTH};
 
-pub(crate) fn request_open_dialog() -> Task<Message> {
-    #[cfg(target_os = "macos")]
-    {
-        let path = rfd::FileDialog::new()
-            .add_filter(
-                "Supported Audio",
-                &["prot", "mka", "wav", "mp3", "ogg", "aiff", "aif"],
-            )
-            .add_filter("Proteus Audio", &["prot", "mka"])
-            .add_filter("Common Audio", &["wav", "mp3", "ogg", "aiff", "aif"])
-            .pick_file();
-        Task::done(Message::FilePicked(path))
+#[cfg(not(target_os = "macos"))]
+pub(crate) fn request_open_dialog(generation: u64) -> Task<Message> {
+    // RFD requires the asynchronous picker to be created on the main thread.
+    // `request_open_dialog` is called from Iced's update loop, before the task
+    // is handed to its executor.
+    let picker = rfd::AsyncFileDialog::new()
+        .add_filter(
+            "Supported Audio",
+            &["prot", "mka", "wav", "mp3", "ogg", "aiff", "aif"],
+        )
+        .add_filter("Proteus Audio", &["prot", "mka"])
+        .add_filter("Common Audio", &["wav", "mp3", "ogg", "aiff", "aif"])
+        .pick_file();
+
+    Task::perform(
+        async move { picker.await.map(|file| file.path().to_owned()) },
+        move |path| Message::FilePicked { generation, path },
+    )
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) struct MacOpenDialog {
+    panel: objc2::rc::Retained<objc2_app_kit::NSOpenPanel>,
+    completion_sender:
+        std::sync::Arc<std::sync::Mutex<Option<iced::futures::channel::oneshot::Sender<bool>>>>,
+}
+
+#[cfg(target_os = "macos")]
+impl MacOpenDialog {
+    pub(crate) fn new(generation: u64) -> (Self, Task<Message>) {
+        use block2::RcBlock;
+        use iced::futures::channel::oneshot;
+        use objc2::MainThreadMarker;
+        use objc2_app_kit::{NSModalResponseOK, NSOpenPanel};
+        use objc2_foundation::{NSArray, NSString};
+
+        let mtm = MainThreadMarker::new().expect("open dialogs must start on the main thread");
+        let panel = NSOpenPanel::openPanel(mtm);
+        panel.setCanChooseFiles(true);
+        panel.setCanChooseDirectories(false);
+        panel.setAllowsMultipleSelection(false);
+        let allowed_file_types = NSArray::from_retained_slice(&[
+            NSString::from_str("prot"),
+            NSString::from_str("mka"),
+            NSString::from_str("wav"),
+            NSString::from_str("mp3"),
+            NSString::from_str("ogg"),
+            NSString::from_str("aiff"),
+            NSString::from_str("aif"),
+        ]);
+        #[allow(deprecated)]
+        panel.setAllowedFileTypes(Some(&allowed_file_types));
+
+        let (sender, receiver) = oneshot::channel();
+        let sender = std::sync::Arc::new(std::sync::Mutex::new(Some(sender)));
+        let completion_sender = sender.clone();
+        let completion = RcBlock::new(move |response| {
+            if let Ok(mut sender) = sender.lock()
+                && let Some(sender) = sender.take()
+            {
+                let _ = sender.send(response == NSModalResponseOK);
+            }
+        });
+        panel.beginWithCompletionHandler(&completion);
+
+        let task = Task::perform(
+            async move { receiver.await.unwrap_or(false) },
+            move |accepted| Message::MacOpenDialogFinished {
+                generation,
+                accepted,
+            },
+        );
+
+        (
+            Self {
+                panel,
+                completion_sender,
+            },
+            task,
+        )
     }
 
-    #[cfg(not(target_os = "macos"))]
-    Task::perform(
-        async move {
-            rfd::FileDialog::new()
-                .add_filter(
-                    "Supported Audio",
-                    &["prot", "mka", "wav", "mp3", "ogg", "aiff", "aif"],
-                )
-                .add_filter("Proteus Audio", &["prot", "mka"])
-                .add_filter("Common Audio", &["wav", "mp3", "ogg", "aiff", "aif"])
-                .pick_file()
-        },
-        Message::FilePicked,
-    )
+    pub(crate) fn selected_path(&self) -> Option<PathBuf> {
+        self.panel
+            .URLs()
+            .objectAtIndex(0)
+            .path()
+            .map(|path| PathBuf::from(path.to_string()))
+    }
+
+    pub(crate) fn dismiss(&self) {
+        self.panel.orderOut(None);
+        if let Ok(mut sender) = self.completion_sender.lock()
+            && let Some(sender) = sender.take()
+        {
+            let _ = sender.send(false);
+        }
+    }
 }
 
 pub(crate) fn filter_existing_files(paths: Vec<PathBuf>) -> Task<Vec<PathBuf>> {

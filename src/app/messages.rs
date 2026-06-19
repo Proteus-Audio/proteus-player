@@ -22,7 +22,16 @@ pub(crate) enum Message {
     PlayPausePressed(window::Id),
     ResetPressed(window::Id),
     ShufflePressed(window::Id),
-    FilePicked(Option<PathBuf>),
+    #[cfg(not(target_os = "macos"))]
+    FilePicked {
+        generation: u64,
+        path: Option<PathBuf>,
+    },
+    #[cfg(target_os = "macos")]
+    MacOpenDialogFinished {
+        generation: u64,
+        accepted: bool,
+    },
     RecentFilesLoaded(Result<Vec<PathBuf>, String>),
     RecentFilesValidated {
         generation: u64,

@@ -150,7 +150,13 @@ fn update(state: &mut ProteusApp, message: Message) -> Task<Message> {
             state.set_focused_window(window_id);
             state.start_open_command_dialog()
         }
-        Message::FilePicked(path) => state.handle_file_picked(path),
+        #[cfg(not(target_os = "macos"))]
+        Message::FilePicked { generation, path } => state.handle_file_picked(generation, path),
+        #[cfg(target_os = "macos")]
+        Message::MacOpenDialogFinished {
+            generation,
+            accepted,
+        } => state.handle_macos_open_dialog_finished(generation, accepted),
         Message::RecentFilesLoaded(result) => {
             state.load_recent_files(result);
             Task::none()
@@ -228,7 +234,6 @@ fn initial_boot_task(state: &mut ProteusApp, initial_path: Option<PathBuf>) -> T
             let opened_paths = effects::take_macos_opened_files();
             if opened_paths.is_empty() {
                 state.schedule_startup_open_dialog(Duration::from_millis(350))
-                // state.open_window(None)
             } else {
                 let mut tasks = Vec::with_capacity(opened_paths.len());
                 for path in opened_paths {

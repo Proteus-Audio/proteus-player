@@ -5,9 +5,9 @@ use std::time::{Duration, Instant};
 use iced::task::Task;
 use iced::window;
 
-use crate::app::effects::{
-    open_player_window, request_open_dialog, set_macos_app_icon_from_bytes, show_about_dialog,
-};
+#[cfg(not(target_os = "macos"))]
+use crate::app::effects::request_open_dialog;
+use crate::app::effects::{open_player_window, set_macos_app_icon_from_bytes, show_about_dialog};
 use crate::app::icons::IconSet;
 use crate::app::memory::MemorySampler;
 use crate::app::messages::Message;
@@ -145,6 +145,10 @@ pub(crate) struct ProteusApp {
     pub(crate) global_error: Option<String>,
     memory_sampler: Option<MemorySampler>,
     pending_file_pick_target: FilePickTarget,
+    file_dialog_generation: u64,
+    active_file_dialog_generation: Option<u64>,
+    #[cfg(target_os = "macos")]
+    macos_open_dialog: Option<crate::app::effects::MacOpenDialog>,
     startup_open_dialog_due_at: Option<Instant>,
     recent_files: Vec<PathBuf>,
     recent_files_generation: u64,
@@ -165,6 +169,10 @@ impl ProteusApp {
             global_error: None,
             memory_sampler: MemorySampler::from_feat(),
             pending_file_pick_target: FilePickTarget::NewWindow,
+            file_dialog_generation: 0,
+            active_file_dialog_generation: None,
+            #[cfg(target_os = "macos")]
+            macos_open_dialog: None,
             startup_open_dialog_due_at: None,
             recent_files: Vec::new(),
             recent_files_generation: 0,
@@ -370,19 +378,98 @@ impl ProteusApp {
     }
 
     pub(crate) fn start_new_window_open_dialog(&mut self) -> Task<Message> {
-        self.pending_file_pick_target = FilePickTarget::NewWindow;
-        request_open_dialog()
+        self.start_open_dialog(FilePickTarget::NewWindow)
     }
 
     pub(crate) fn start_open_command_dialog(&mut self) -> Task<Message> {
-        self.pending_file_pick_target = self
+        let target = self
             .focused_window
             .map(|window_id| FilePickTarget::OpenCommand { window_id })
             .unwrap_or(FilePickTarget::NewWindow);
-        request_open_dialog()
+        self.start_open_dialog(target)
     }
 
-    pub(crate) fn handle_file_picked(&mut self, path: Option<PathBuf>) -> Task<Message> {
+    #[cfg(not(target_os = "macos"))]
+    pub(crate) fn handle_file_picked(
+        &mut self,
+        generation: u64,
+        path: Option<PathBuf>,
+    ) -> Task<Message> {
+        if self.active_file_dialog_generation != Some(generation) {
+            return Task::none();
+        }
+
+        self.active_file_dialog_generation = None;
+        self.open_picked_path(path)
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(crate) fn handle_macos_open_dialog_finished(
+        &mut self,
+        generation: u64,
+        accepted: bool,
+    ) -> Task<Message> {
+        if self.active_file_dialog_generation != Some(generation) {
+            return Task::none();
+        }
+
+        self.active_file_dialog_generation = None;
+        let path = accepted
+            .then(|| {
+                self.macos_open_dialog
+                    .as_ref()
+                    .and_then(|dialog| dialog.selected_path())
+            })
+            .flatten();
+        self.macos_open_dialog = None;
+
+        self.open_picked_path(path)
+    }
+
+    pub(crate) fn handle_external_open_path(&mut self, path: PathBuf) -> Task<Message> {
+        self.startup_open_dialog_due_at = None;
+        self.cancel_active_file_dialog();
+
+        if let Some(window_id) = self.focused_window
+            && let Some(window) = self.windows.get_mut(&window_id)
+            && window.is_empty()
+        {
+            if window.load_path(path.clone()) {
+                self.record_recent_file(path);
+            }
+            return Task::none();
+        }
+
+        self.open_window(Some(path))
+    }
+
+    fn start_open_dialog(&mut self, target: FilePickTarget) -> Task<Message> {
+        self.pending_file_pick_target = target;
+        self.file_dialog_generation = self.file_dialog_generation.wrapping_add(1);
+        self.active_file_dialog_generation = Some(self.file_dialog_generation);
+        #[cfg(target_os = "macos")]
+        {
+            let (dialog, task) =
+                crate::app::effects::MacOpenDialog::new(self.file_dialog_generation);
+            self.macos_open_dialog = Some(dialog);
+            task
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        request_open_dialog(self.file_dialog_generation)
+    }
+
+    fn cancel_active_file_dialog(&mut self) {
+        if self.active_file_dialog_generation.take().is_some() {
+            self.pending_file_pick_target = FilePickTarget::NewWindow;
+            #[cfg(target_os = "macos")]
+            if let Some(dialog) = self.macos_open_dialog.take() {
+                dialog.dismiss();
+            }
+        }
+    }
+
+    fn open_picked_path(&mut self, path: Option<PathBuf>) -> Task<Message> {
         let target = self.pending_file_pick_target;
         self.pending_file_pick_target = FilePickTarget::NewWindow;
 
@@ -405,22 +492,6 @@ impl ProteusApp {
                 }
             }
         }
-    }
-
-    pub(crate) fn handle_external_open_path(&mut self, path: PathBuf) -> Task<Message> {
-        self.startup_open_dialog_due_at = None;
-
-        if let Some(window_id) = self.focused_window
-            && let Some(window) = self.windows.get_mut(&window_id)
-            && window.is_empty()
-        {
-            if window.load_path(path.clone()) {
-                self.record_recent_file(path);
-            }
-            return Task::none();
-        }
-
-        self.open_window(Some(path))
     }
 
     pub(crate) fn schedule_startup_open_dialog(&mut self, delay: Duration) -> Task<Message> {

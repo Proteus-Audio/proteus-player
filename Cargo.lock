@@ -3527,6 +3527,7 @@ name = "proteus-player"
 version = "0.5.4"
 dependencies = [
  "anyhow",
+ "block2 0.6.2",
  "dirs",
  "iced",
  "muda",
