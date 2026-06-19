@@ -30,6 +30,7 @@ pub(crate) struct PlayerWindowState {
     pub(crate) last_error: Option<String>,
     pub(crate) zoom_factor: f64,
     pub(crate) window_title: String,
+    pending_title_tooltip: Option<String>,
     pub(crate) menu_open: bool,
     timeline_override_until: Option<Instant>,
     volume_override_until: Option<Instant>,
@@ -47,6 +48,7 @@ impl PlayerWindowState {
             last_error: None,
             zoom_factor: 1.0,
             window_title: "Proteus Player".to_owned(),
+            pending_title_tooltip: None,
             menu_open: false,
             timeline_override_until: None,
             volume_override_until: None,
@@ -65,6 +67,7 @@ impl PlayerWindowState {
                 self.last_error = None;
                 if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
                     self.window_title = name.to_owned();
+                    self.pending_title_tooltip = Some(name.to_owned());
                 }
             }
             Err(err @ PlaybackLoadError::UnsupportedFormat { .. }) => {
@@ -210,6 +213,18 @@ impl ProteusApp {
             window.refresh_status();
         }
         self.log_memory_tick();
+    }
+
+    pub(crate) fn take_pending_title_tooltips(&mut self) -> Vec<(window::Id, String)> {
+        self.windows
+            .iter_mut()
+            .filter_map(|(window_id, window)| {
+                window
+                    .pending_title_tooltip
+                    .take()
+                    .map(|title| (*window_id, title))
+            })
+            .collect()
     }
 
     pub(crate) fn handle_menu_action(&mut self, action: MenuAction) -> Task<Message> {

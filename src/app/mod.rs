@@ -50,6 +50,10 @@ fn update(state: &mut ProteusApp, message: Message) -> Task<Message> {
 
             let mut tasks = Vec::new();
 
+            for (window_id, title) in state.take_pending_title_tooltips() {
+                tasks.push(effects::set_window_title_tooltip(window_id, title));
+            }
+
             if let Err(err) = effects::ensure_macos_open_file_handler() {
                 state.global_error = Some(format!("Failed to install file-open handler: {err}"));
             }

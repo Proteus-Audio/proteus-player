@@ -49,6 +49,46 @@ pub(crate) fn show_about_dialog() -> Task<Message> {
     )
 }
 
+#[cfg(target_os = "macos")]
+pub(crate) fn set_window_title_tooltip(window_id: window::Id, title: String) -> Task<Message> {
+    use iced::window::raw_window_handle::RawWindowHandle;
+    use objc2::rc::Retained;
+    use objc2_app_kit::NSView;
+    use objc2_foundation::NSString;
+
+    window::run(window_id, move |window| {
+        let Ok(handle) = window.window_handle() else {
+            return;
+        };
+        let RawWindowHandle::AppKit(handle) = handle.as_raw() else {
+            return;
+        };
+
+        // SAFETY: `window_handle` guarantees this pointer is a valid NSView for
+        // the duration of the callback, which runs on Iced's UI event loop.
+        let Some(content_view) =
+            (unsafe { Retained::<NSView>::retain(handle.ns_view.as_ptr().cast()) })
+        else {
+            return;
+        };
+
+        // The content view's parent is the native title-bar frame. A tooltip
+        // there remains available even when AppKit truncates the title label.
+        let Some(titlebar) = (unsafe { content_view.superview() }) else {
+            return;
+        };
+
+        let title = NSString::from_str(&title);
+        titlebar.setToolTip(Some(&title));
+    })
+    .map(|_| Message::Noop)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(crate) fn set_window_title_tooltip(_window_id: window::Id, _title: String) -> Task<Message> {
+    Task::none()
+}
+
 pub(crate) fn open_player_window() -> (window::Id, Task<window::Id>) {
     window::open(player_window_settings())
 }
